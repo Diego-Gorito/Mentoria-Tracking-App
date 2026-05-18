@@ -1,3 +1,12 @@
+# DEPRECATED — Cloudflare Workers config
+# Migrado pra Easypanel KV8 em 2026-05-18.
+# Deploy atual via:
+#   /Users/gorito/Dev/Mentoria-Tracking/infra/easypanel/tracking-app-compose.yml  (frontend)
+#   /Users/gorito/Dev/Mentoria-Tracking/infra/easypanel/tracking-api-compose.yml  (backend)
+#
+# Conteúdo original preservado abaixo pra referência histórica.
+# ---
+
 name = "mentoria-tracking-api"
 main = "workers/api/index.ts"
 compatibility_date = "2026-05-18"
@@ -18,11 +27,5 @@ ENVIRONMENT = "production"
 #   RESEND_API_KEY  — envio magic-link emails
 #   INTERNAL_API_KEY — shared secret pra rota /api/internal/creds (n8n → Worker)
 
-# TODO Era 1 sprint 1 — adicionar após provisionar Hyperdrive no CF dashboard
-# [[hyperdrive]]
-# binding = "DB"
-# id = "<hyperdrive-id>"  # Hyperdrive pra Postgres KV2 (connection pooling)
-
-# Ambiente de desenvolvimento local (sobrescreve vars acima)
 [env.development.vars]
 ENVIRONMENT = "development"

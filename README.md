@@ -9,9 +9,9 @@ Status: **MVP Scaffolding** — nao usar em producao.
 |---|---|
 | Frontend | Vite 5 + React 18 + TypeScript 5.5 |
 | Estilo | Tailwind CSS 3.4 + Design System Mentoria (tokens ERP 1:1) |
-| Edge Functions | Cloudflare Workers + Hono |
-| Deploy frontend | Cloudflare Pages |
-| Deploy worker | Cloudflare Workers |
+| API Backend | Hono + Node.js (`@hono/node-server`) |
+| Deploy frontend | Easypanel KV8 — nginx container |
+| Deploy backend | Easypanel KV8 — Node.js container |
 | Backend data | Postgres KV2 (Hostinger) + n8n + sGTM — repo Mentoria-Tracking |
 
 ## Quickstart
@@ -24,13 +24,10 @@ npm install
 # 2. Frontend (localhost:5173)
 npm run dev
 
-# 3. Worker API (localhost:8787) — em outro terminal
-npm run dev:worker
+# 3. API Node.js local (localhost:3000)
+PORT=3000 npx tsx workers/api/index.ts
 
-# 4. Ambos ao mesmo tempo
-npm run dev:all
-
-# 5. Build producao
+# 4. Build producao (Vite)
 npm run build
 ```
 
@@ -45,7 +42,7 @@ Fonte de verdade para design system:
 ## Links
 
 - Plano produto: `/Users/gorito/.claude/plans/vai-ser-um-produto-logical-candy.md`
-- ADR-006 Tracking SaaS: criado por Aria em paralelo (verificar `.aiox-core/development/decisions/`)
+- ADR-006 Tracking SaaS: `.aiox-core/development/decisions/` (backend repo)
 - Backend tracking: `/Users/gorito/Dev/Mentoria-Tracking/`
 - ERP Mentoria (boilerplate source): `/Users/gorito/Dev/ERP-Mentoria/`
 
@@ -62,67 +59,54 @@ src/
     dashboard/   # Dashboard (6 KPIs + 3 charts + 2 tables)
     settings/    # Integrations (6 plataformas)
   lib/
-    api.ts       # Cliente fetch para Worker /api/*
+    api.ts       # Cliente fetch para /api/*
     auth.ts      # JWT localStorage storage
     theme.tsx    # ThemeProvider dark/light
     utils.ts     # cn, formatCurrency, formatDate, maskToken
   hooks/
-    useTenant.ts         # Tenant do JWT
+    useTenant.ts              # Tenant do JWT
     useTenantFromHostname.ts  # Resolve tenant pelo hostname (pre-login)
-    useCredentials.ts    # Lista credenciais do tenant
-    useAnalytics.ts      # KPIs do dashboard
+    useCredentials.ts         # Lista credenciais do tenant
+    useAnalytics.ts           # KPIs do dashboard
 workers/
   api/
-    index.ts     # Hono router com stubs de todas as rotas
-wrangler.toml    # Config Cloudflare Workers
+    index.ts     # Hono router com stubs de todas as rotas (Node.js via @hono/node-server)
+  Dockerfile     # Container backend (node:22-alpine + tsx)
+Dockerfile       # Container frontend (node:22-alpine builder + nginx:alpine serve)
+nginx.conf       # nginx SPA config + proxy /api/ → tracking-api:3000
 ```
 
-## Deploy
+## Deploy — Easypanel KV8
 
-Configuracao completa em [.cloudflare-pages-config.md](.cloudflare-pages-config.md).
+Compose YAMLs em `/Users/gorito/Dev/Mentoria-Tracking/infra/easypanel/`:
 
-| Componente | Plataforma | URL |
-|---|---|---|
-| Frontend (SPA) | Cloudflare Pages | `https://tracking.escola.click` |
-| Worker API | Cloudflare Workers | `https://tracking.escola.click/api/*` |
+| Compose | Servico Easypanel | Porta | Dominio |
+|---|---|---|---|
+| `tracking-app-compose.yml` | tracking-app | 80 (nginx) | a definir |
+| `tracking-api-compose.yml` | tracking-api | 3000 (Node.js) | sem dominio publico (proxy interno) |
 
-### Sequencia minima (apos `wrangler login`)
+### Sequencia de deploy (Pax via tRPC API Easypanel)
 
 ```bash
-# 1. Deploy Worker
-npx wrangler deploy
-
-# 2. Setar secrets
-npx wrangler secret put DATABASE_URL
-npx wrangler secret put JWT_SECRET
-npx wrangler secret put VAULT_KEY
-
-# 3. Pages — via dashboard CF (conectar repo GitHub)
-# Ver .cloudflare-pages-config.md para instrucoes completas
+# Pax cria servicos via curl tRPC — nao clicar UI manualmente
+# Ver .aiox-core/development/tasks/ pra task formal de deploy
 ```
 
-## DNS requirements
+### Secrets (via aba Environment do Easypanel — nao commitar)
 
-Zona `escola.click` no Cloudflare (account `02642f60012f1a8d7779ca6d89815f39`).
-
-- `tracking.escola.click` — CNAME para Cloudflare Pages (CF configura automatico via custom domain)
-- Path `/api/*` roteado pelo Worker via `wrangler.toml` `[[routes]]`
-
-## Backend pairing
-
-Este repo e o frontend + Worker API do tracking SaaS.
-O backend de dados (Postgres KV2, n8n workflows, sGTM) fica em:
-- Repo: `/Users/gorito/Dev/Mentoria-Tracking/` (privado)
-- GitHub: `Diego-Gorito/Mentoria-Tracking`
-
-Referencia arquitetural: ADR-006 em `docs/adrs/0006-mentoria-tracking-saas.md` (backend repo).
+```
+DATABASE_URL_OWNER  — postgres://tracking_writer:<pass>@69.62.102.49:6543/mentoria-tracking
+JWT_SECRET          — 32+ chars random
+VAULT_KEY           — pgcrypto master key
+RESEND_API_KEY      — Resend API key pra magic-link emails
+INTERNAL_API_KEY    — shared secret /api/internal/creds (n8n → API)
+```
 
 ## CI
 
 GitHub Actions em `.github/workflows/ci.yml`:
 - Roda em todo push/PR em `main`
-- Jobs: `npm ci` + `npm run build` (Vite) + `wrangler deploy --dry-run`
-- Dry-run tolerante a erro de auth (sem `CLOUDFLARE_API_TOKEN` em CI ainda)
+- Jobs: `npm ci` + `npm run build` (Vite)
 
 ## TODOs por sprint
 
@@ -130,7 +114,7 @@ GitHub Actions em `.github/workflows/ci.yml`:
 - [ ] `POST /api/auth/signup` — bcrypt + JWT HS256
 - [ ] `POST /api/auth/login`
 - [ ] `POST /api/auth/magic-link` + verify — Resend email
-- [ ] Provisionar Hyperdrive (CF) -> Postgres KV2
+- [ ] Conexao real Postgres KV2 (pg/postgres.js)
 - [ ] `GET /api/tenants/resolve` — query real
 
 ### Sprint 2 — Credentials + Integrations
@@ -146,8 +130,9 @@ GitHub Actions em `.github/workflows/ci.yml`:
 - [ ] Tabela dead-letter dispatches
 
 ### Era 2+
-- [ ] Router com history API (react-router ou TanStack Router)
+- [ ] Router com history API (TanStack Router)
 - [ ] RLS Postgres real por tenant
 - [ ] Custom domains por tenant
 - [ ] Multi-usuario por tenant
 - [ ] HttpOnly cookies pra JWT
+- [ ] Avaliar retorno ao CDN edge (Cloudflare/Bunny) se latencia KV8 insuficiente
