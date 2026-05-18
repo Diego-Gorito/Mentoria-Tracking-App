@@ -13,9 +13,9 @@ WORKDIR /app
 
 # Copiar manifests antes do código (camadas Docker mais estáveis)
 COPY package*.json ./
-# Copiar package.json do workers se existir (suporte a monorepo futuro)
-COPY workers/package*.json ./workers/ 2>/dev/null || true
 
+# Era 1: deps no root package.json (sem monorepo). workers/ não tem package.json próprio.
+# Era 2: se virar monorepo, adicionar `COPY workers/package*.json ./workers/` ANTES de npm ci.
 RUN npm ci
 
 COPY workers ./workers
