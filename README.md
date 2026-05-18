@@ -77,6 +77,53 @@ workers/
 wrangler.toml    # Config Cloudflare Workers
 ```
 
+## Deploy
+
+Configuracao completa em [.cloudflare-pages-config.md](.cloudflare-pages-config.md).
+
+| Componente | Plataforma | URL |
+|---|---|---|
+| Frontend (SPA) | Cloudflare Pages | `https://tracking.escola.click` |
+| Worker API | Cloudflare Workers | `https://tracking.escola.click/api/*` |
+
+### Sequencia minima (apos `wrangler login`)
+
+```bash
+# 1. Deploy Worker
+npx wrangler deploy
+
+# 2. Setar secrets
+npx wrangler secret put DATABASE_URL
+npx wrangler secret put JWT_SECRET
+npx wrangler secret put VAULT_KEY
+
+# 3. Pages — via dashboard CF (conectar repo GitHub)
+# Ver .cloudflare-pages-config.md para instrucoes completas
+```
+
+## DNS requirements
+
+Zona `escola.click` no Cloudflare (account `02642f60012f1a8d7779ca6d89815f39`).
+
+- `tracking.escola.click` — CNAME para Cloudflare Pages (CF configura automatico via custom domain)
+- Path `/api/*` roteado pelo Worker via `wrangler.toml` `[[routes]]`
+
+## Backend pairing
+
+Este repo e o frontend + Worker API do tracking SaaS.
+O backend de dados (Postgres KV2, n8n workflows, sGTM) fica em:
+- Repo: `/Users/gorito/Dev/Mentoria-Tracking/` (privado)
+- GitHub: `Diego-Gorito/Mentoria-Tracking`
+
+Referencia arquitetural: ADR-006 em `docs/adrs/0006-mentoria-tracking-saas.md` (backend repo).
+
+## CI
+
+GitHub Actions em `.github/workflows/ci.yml`:
+- Roda em todo push/PR em `main`
+- Jobs: `npm ci` + `npm run build` (Vite) + `wrangler deploy --dry-run`
+- Dry-run tolerante a erro de auth (sem `CLOUDFLARE_API_TOKEN` em CI ainda)
+
 ## TODOs por sprint
 
 ### Sprint 1 — Auth

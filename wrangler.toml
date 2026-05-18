@@ -2,22 +2,27 @@ name = "mentoria-tracking-api"
 main = "workers/api/index.ts"
 compatibility_date = "2026-05-18"
 compatibility_flags = ["nodejs_compat"]
+account_id = "02642f60012f1a8d7779ca6d89815f39"
+
+[[routes]]
+pattern = "tracking.escola.click/api/*"
+zone_name = "escola.click"
 
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
 
-# TODO Era 1 sprint 1 — adicionar após provisionar recursos CF
-# [hyperdrive]
+# Secrets via wrangler secret put (NÃO commitar):
+#   DATABASE_URL    — postgres connection string KV2 (ou Hyperdrive binding quando provisionado)
+#   JWT_SECRET      — 32+ chars random
+#   VAULT_KEY       — mesma master key do pgcrypto
+#   RESEND_API_KEY  — envio magic-link emails
+#   INTERNAL_API_KEY — shared secret pra rota /api/internal/creds (n8n → Worker)
+
+# TODO Era 1 sprint 1 — adicionar após provisionar Hyperdrive no CF dashboard
+# [[hyperdrive]]
 # binding = "DB"
 # id = "<hyperdrive-id>"  # Hyperdrive pra Postgres KV2 (connection pooling)
 
-# TODO Era 1 sprint 1 — criar secrets via wrangler secret put
-# Secrets (NÃO commitar):
-#   JWT_SECRET          = wrangler secret put JWT_SECRET
-#   VAULT_KEY           = wrangler secret put VAULT_KEY
-#   RESEND_API_KEY      = wrangler secret put RESEND_API_KEY
-#   INTERNAL_API_KEY    = wrangler secret put INTERNAL_API_KEY
-
-[[env.production.vars]]
-# Sobrescreve ENVIRONMENT em prod
-ENVIRONMENT = "production"
+# Ambiente de desenvolvimento local (sobrescreve vars acima)
+[env.development.vars]
+ENVIRONMENT = "development"
