@@ -1,0 +1,23 @@
+name = "mentoria-tracking-api"
+main = "workers/api/index.ts"
+compatibility_date = "2026-05-18"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "development"
+
+# TODO Era 1 sprint 1 — adicionar após provisionar recursos CF
+# [hyperdrive]
+# binding = "DB"
+# id = "<hyperdrive-id>"  # Hyperdrive pra Postgres KV2 (connection pooling)
+
+# TODO Era 1 sprint 1 — criar secrets via wrangler secret put
+# Secrets (NÃO commitar):
+#   JWT_SECRET          = wrangler secret put JWT_SECRET
+#   VAULT_KEY           = wrangler secret put VAULT_KEY
+#   RESEND_API_KEY      = wrangler secret put RESEND_API_KEY
+#   INTERNAL_API_KEY    = wrangler secret put INTERNAL_API_KEY
+
+[[env.production.vars]]
+# Sobrescreve ENVIRONMENT em prod
+ENVIRONMENT = "production"

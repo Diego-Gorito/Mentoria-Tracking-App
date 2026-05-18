@@ -1,0 +1,523 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tokens CSS — DESIGN.md v1.5 (Stitch + light/dark theming)
+   --brand-green é runtime-overridable por ColorPresetSync; bright/dim/glow
+   derivam via color-mix pra acompanhar trocas de paleta automaticamente. */
+:root {
+  --brand-green: #16df6f;
+  --brand-green-bright: color-mix(in srgb, var(--brand-green) 88%, white 12%);
+  --brand-green-dim: color-mix(in srgb, var(--brand-green) 80%, black 20%);
+  --brand-green-2: #00a99d;
+  --brand-black: #0a0a0a;
+  --brand-glow: color-mix(in srgb, var(--brand-green) 40%, transparent 60%);
+
+  /* Surfaces v1.3 */
+  --bg-content: #fafaf7;
+  --bg-elevated: #ffffff;
+  --bg-muted: #f4f4f1;
+  --bg-sidebar: #11131a;
+  --bg-sidebar-elevated: #1a1c24;
+  --bg-sidebar-hover: #1e2028;
+
+  /* Theme app surfaces (default = dark) */
+  --app-bg: #23232c;
+  --app-sidebar-bg: rgba(28, 28, 36, 0.92);
+  --app-card-bg: rgba(255, 255, 255, 0.05);
+  --app-card-bg-hover: rgba(255, 255, 255, 0.08);
+  --app-card-border: rgba(255, 255, 255, 0.1);
+  --app-pill-bg: rgba(255, 255, 255, 0.06);
+  --app-pill-border: rgba(255, 255, 255, 0.12);
+  --app-pill-fg: rgba(250, 250, 250, 0.95);
+  --app-input-bg: rgba(255, 255, 255, 0.04);
+  --app-input-border: rgba(255, 255, 255, 0.1);
+  --app-fg: #fafafa;
+  --app-fg-muted: #a1a1aa;
+  --app-fg-subtle: rgba(255, 255, 255, 0.5);
+  --app-divider: rgba(255, 255, 255, 0.06);
+  --app-divider-soft: rgba(255, 255, 255, 0.05);
+  --app-dot-color: rgba(255, 255, 255, 0.07);
+  --app-spotlight: rgba(255, 255, 255, 0.06);
+
+  /* Borders v1.3 — ultra sutis */
+  --border-subtle: #f0f0f0;
+  --border-default: #eaeaea;
+  --border-sidebar: #1e2028;
+  --border-sidebar-strong: #27292f;
+
+  /* Texto WCAG AA */
+  --primary-text: #0a8f4d;
+  --info-text: #006b62;
+  --success-text: #0a8f4d;
+  --warning-text: #b45309;
+  --danger-text: #b91c1c;
+  --muted-text: #52525b;
+
+  /* Easing premium */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* v1.7 — tokens novos */
+  --ambient-glow-intensity: rgba(22, 223, 111, 0.025);
+  --ring-focus-complex: 0 0 0 2px var(--brand-green), 0 0 0 4px var(--app-bg);
+  --icon-duotone-secondary: 0.35;
+}
+
+/* LIGHT THEME — mais escuro que Stitch (cinza-pérola), branco-quase nos cards */
+html[data-theme='light'] {
+  --app-bg: #eaeaee;
+  --app-sidebar-bg: rgba(255, 255, 255, 0.95);
+  --app-card-bg: rgba(255, 255, 255, 0.92);
+  --app-card-bg-hover: rgba(255, 255, 255, 1);
+  --app-card-border: rgba(10, 10, 10, 0.08);
+  --app-pill-bg: rgba(255, 255, 255, 0.85);
+  --app-pill-border: rgba(10, 10, 10, 0.1);
+  --app-pill-fg: rgba(10, 10, 10, 0.85);
+  --app-input-bg: rgba(255, 255, 255, 0.85);
+  --app-input-border: rgba(10, 10, 10, 0.1);
+  --app-fg: #0a0a0a;
+  --app-fg-muted: #52525b;
+  --app-fg-subtle: #71717a;
+  --app-divider: rgba(10, 10, 10, 0.08);
+  --app-divider-soft: rgba(10, 10, 10, 0.05);
+  --app-dot-color: rgba(10, 10, 10, 0.07);
+  --app-spotlight: rgba(255, 255, 255, 0.7);
+}
+
+/* v1.7: Reduced motion — desativa microanimações para usuários que pedem menos movimento
+   (WCAG 2.3.3 AAA + expectativa real de usuários com enxaqueca/vestibular).
+   Keyframes Tailwind (fade-up, shimmer, pulse-green, pulse-soft, fade-in, scale-in)
+   são cancelados via animation: none neste bloco. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-shimmer,
+  .animate-pulse-green,
+  .animate-pulse-soft,
+  .animate-fade-in,
+  .animate-scale-in,
+  .animate-spin,
+  .animate-slide-in-left {
+    animation: none !important;
+    transition: none !important;
+  }
+  .card-hover:hover,
+  .stitch-lift:hover,
+  .stitch-card:hover,
+  .stitch-card::before {
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+@layer base {
+  body {
+    @apply font-sans bg-content-bg text-fg-on-light antialiased;
+    /* Lexend stylistic sets pra refinamento */
+    font-feature-settings: 'cv11', 'ss03';
+    /* Noise texture sutilíssima sobre off-white */
+    /* v1.7: ambient glow consumido via --ambient-glow-intensity (token canônico) */
+    background-image:
+      radial-gradient(ellipse at top, var(--ambient-glow-intensity) 0%, transparent 60%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.018 0'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>");
+  }
+
+  /* Focus ring v1.3 — halo verde polido */
+  *:focus-visible {
+    outline: 2px solid var(--brand-green);
+    outline-offset: 2px;
+    border-radius: inherit;
+  }
+
+  /* Scrollbar técnica refinada */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d4d4d8;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #71717a;
+    background-clip: padding-box;
+  }
+
+  /* Selection com tom da marca */
+  ::selection {
+    background: rgba(22, 223, 111, 0.3);
+    color: #0a0a0a;
+  }
+}
+
+@layer components {
+  /* Card v1.3 — Stitch/Vercel polish */
+  .card {
+    @apply bg-white rounded-lg border border-border-subtle shadow-sm transition-all duration-base;
+    transition-timing-function: var(--ease-spring);
+  }
+  /* v1.7: lift reduzido de -2px → -1px (menos agressivo) */
+  .card-hover:hover {
+    transform: translateY(-1px);
+    border-color: rgba(22, 223, 111, 0.25);
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.06),
+      0 2px 4px rgba(0, 0, 0, 0.03),
+      0 0 0 1px rgba(22, 223, 111, 0.08);
+  }
+
+  /* Skeleton refinado warmer */
+  .skeleton {
+    background: linear-gradient(90deg, #f4f4f1 0%, #eaeaea 50%, #f4f4f1 100%);
+    background-size: 200% 100%;
+    @apply animate-shimmer;
+  }
+
+  /* Status dot indicator (Vercel style) */
+  .dot-indicator {
+    @apply inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle;
+  }
+
+  /* ───── v1.4 Stitch primitives ───── */
+
+  /* Background dot grid (Stitch hero) — luminoso sobre dark */
+  .bg-dots {
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .bg-dots-strong {
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  /* Variante sobre light (sutilíssimo) */
+  .bg-dots-light {
+    background-image: radial-gradient(circle, rgba(10, 10, 10, 0.045) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Pill — chip arredondado glassy (Stitch real: bg mais visível, texto claro) */
+  .stitch-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(250, 250, 250, 0.95);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 200ms var(--ease-spring);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .stitch-pill:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+  }
+  .stitch-pill[aria-pressed='true'],
+  .stitch-pill.active {
+    background: rgba(22, 223, 111, 0.1);
+    border-color: rgba(22, 223, 111, 0.4);
+    color: #16df6f;
+  }
+  .stitch-pill-sm {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
+  /* Card glassy grafite (Stitch real — não preto, tem vida) */
+  .stitch-card {
+    position: relative;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    transition: all 250ms var(--ease-spring);
+    overflow: hidden;
+  }
+  .stitch-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+      400px circle at var(--mx, 50%) var(--my, 50%),
+      rgba(255, 255, 255, 0.08),
+      transparent 40%
+    );
+    opacity: 0;
+    transition: opacity 250ms var(--ease-spring);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .stitch-card:hover::before {
+    opacity: 1;
+  }
+  .stitch-card:hover {
+    background: rgba(255, 255, 255, 0.055);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+  .stitch-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Input dark Stitch */
+  .stitch-input {
+    width: 100%;
+    height: 48px;
+    padding: 0 16px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fafafa;
+    font-size: 14px;
+    transition: all 200ms var(--ease-spring);
+  }
+  .stitch-input::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+  }
+  .stitch-input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(22, 223, 111, 0.5);
+    box-shadow: 0 0 0 4px rgba(22, 223, 111, 0.08);
+  }
+
+  /* Wizard input — versão compacta usada nos forms do wizard de matrícula */
+  .wizard-input {
+    width: 100%;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--app-fg);
+    font-size: 13px;
+    transition: all 200ms var(--ease-spring);
+  }
+  .wizard-input::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+  }
+  .wizard-input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(22, 223, 111, 0.5);
+    box-shadow: 0 0 0 3px rgba(22, 223, 111, 0.08);
+  }
+  textarea.wizard-input {
+    height: auto;
+    padding: 10px 12px;
+    line-height: 1.5;
+  }
+
+  /* Hero ambient glow overlay (sutil — não escurece, dá vida) */
+  .stitch-ambient {
+    position: relative;
+    isolation: isolate;
+  }
+  .stitch-ambient::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(22, 223, 111, 0.07) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 35% at 90% 100%, rgba(0, 169, 157, 0.05) 0%, transparent 55%);
+    pointer-events: none;
+  }
+
+  /* ───── Tema-aware: stitch-card / stitch-pill / stitch-input usam vars ───── */
+  .stitch-card {
+    background: var(--app-card-bg) !important;
+    border-color: var(--app-card-border) !important;
+    color: var(--app-fg);
+  }
+  .stitch-card:hover {
+    background: var(--app-card-bg-hover) !important;
+  }
+  .stitch-pill {
+    background: var(--app-pill-bg) !important;
+    border-color: var(--app-pill-border) !important;
+    color: var(--app-pill-fg) !important;
+  }
+  .stitch-pill:hover {
+    background: var(--app-card-bg-hover) !important;
+    color: var(--app-fg) !important;
+  }
+  .stitch-input {
+    background: var(--app-input-bg) !important;
+    border-color: var(--app-input-border) !important;
+    color: var(--app-fg) !important;
+  }
+  .stitch-input::placeholder {
+    color: var(--app-fg-subtle) !important;
+  }
+  .bg-dots {
+    background-image: radial-gradient(circle, var(--app-dot-color) 1px, transparent 1px);
+  }
+
+  /* ───── Light theme overrides (Tailwind classes hardcoded → light-aware) ───── */
+  html[data-theme='light'] .text-fg-on-dark {
+    color: var(--app-fg) !important;
+  }
+  html[data-theme='light'] .text-fg-on-dark-muted {
+    color: var(--app-fg-muted) !important;
+  }
+  html[data-theme='light'] .text-fg-on-dark-subtle {
+    color: var(--app-fg-subtle) !important;
+  }
+  html[data-theme='light'] .border-white\/5 {
+    border-color: var(--app-divider-soft) !important;
+  }
+  html[data-theme='light'] .border-white\/10 {
+    border-color: var(--app-divider) !important;
+  }
+  html[data-theme='light'] .border-white\/\[0\.06\] {
+    border-color: var(--app-divider-soft) !important;
+  }
+  html[data-theme='light'] .bg-white\/\[0\.04\] {
+    background: rgba(0, 0, 0, 0.03) !important;
+  }
+  html[data-theme='light'] .bg-white\/\[0\.06\] {
+    background: rgba(0, 0, 0, 0.04) !important;
+  }
+  html[data-theme='light'] .bg-white\/\[0\.04\]:hover,
+  html[data-theme='light'] .hover\:bg-white\/\[0\.06\]:hover {
+    background: rgba(0, 0, 0, 0.05) !important;
+  }
+  html[data-theme='light'] .hover\:bg-white\/\[0\.07\]:hover {
+    background: rgba(0, 0, 0, 0.06) !important;
+  }
+  html[data-theme='light'] .hover\:bg-white\/\[0\.02\]:hover {
+    background: rgba(0, 0, 0, 0.025) !important;
+  }
+
+  /* Body class override pra páginas dark Stitch */
+  .stitch-page {
+    background: #14141a;
+    color: #fafafa;
+  }
+  .stitch-page::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    background-size: 24px 24px;
+    opacity: 0.7;
+  }
+
+  /* ───── Theme-reactive helpers (substitui inline #23232C) ───── */
+  .bg-app-shell {
+    background: var(--app-bg);
+  }
+  .bg-app-sidebar {
+    background: var(--app-sidebar-bg);
+  }
+  .text-app-fg {
+    color: var(--app-fg);
+  }
+  .text-app-muted {
+    color: var(--app-fg-muted);
+  }
+  .text-app-subtle {
+    color: var(--app-fg-subtle);
+  }
+  .border-app {
+    border-color: var(--app-card-border);
+  }
+
+  /* ───── Spotlight GLOBAL no main (Stitch-style: pequeno + fluido) ───── */
+  .spotlight-area {
+    position: relative;
+    isolation: isolate;
+  }
+  .spotlight-area::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 1;
+    background: radial-gradient(
+      280px circle at var(--gx, -300px) var(--gy, -300px),
+      var(--app-spotlight),
+      transparent 65%
+    );
+    opacity: 1;
+    /* Sem transition aqui — rAF cuida da fluidez sem lag */
+    will-change: background;
+  }
+  /* Disabled state: spotlight off via data-attribute */
+  html[data-spotlight='off'] .spotlight-area::after {
+    opacity: 0;
+  }
+  /* v1.7: reduced motion — spotlight off por acessibilidade */
+  @media (prefers-reduced-motion: reduce) {
+    .spotlight-area::after {
+      display: none;
+    }
+  }
+  /* Conteúdo precisa ficar acima do overlay */
+  .spotlight-area > * {
+    position: relative;
+    z-index: 2;
+  }
+
+  /* v1.7: Hover row padrão para tabelas — bg-bg-muted + borda esquerda verde 30%
+     Uso: adicionar classe table-row-hover ao <tr> da tbody.
+     Colunas numéricas: adicionar classe tabular-nums (Tailwind built-in). */
+  .table-row-hover {
+    transition:
+      background-color 150ms var(--ease-spring),
+      border-color 150ms var(--ease-spring);
+  }
+  .table-row-hover:hover {
+    background-color: #f4f4f1; /* --bg-muted */
+    border-left: 2px solid rgba(22, 223, 111, 0.3);
+  }
+
+  /* v1.7: Topbar glass (backdrop-blur-sm, não md — evita perf em scroll pesado) */
+  .topbar-glass {
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(10, 10, 10, 0.06);
+  }
+
+  /* Hover lift universal Stitch — cards seguem cursor */
+  .stitch-lift {
+    position: relative;
+    transition: all 250ms var(--ease-spring);
+  }
+  .stitch-lift::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+      300px circle at var(--mx, 50%) var(--my, 50%),
+      rgba(22, 223, 111, 0.12),
+      transparent 40%
+    );
+    opacity: 0;
+    transition: opacity 250ms var(--ease-spring);
+    pointer-events: none;
+  }
+  .stitch-lift:hover::before {
+    opacity: 1;
+  }
+}

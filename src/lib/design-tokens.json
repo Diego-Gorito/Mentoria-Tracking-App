@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json.schemastore.org/design-tokens.json",
+  "_source": "ERP-Mentoria/tailwind.config.ts + src/styles/globals.css (DESIGN.md v1.5)",
+  "_extracted": "2026-05-18",
+  "colors": {
+    "brand": {
+      "green":       { "value": "#16DF6F", "cssVar": "--brand-green", "note": "runtime-overridable" },
+      "green2":      { "value": "#00A99D", "cssVar": "--brand-green-2" },
+      "greenBright": { "value": "#1FFF7F", "cssVar": "--brand-green-bright", "derivation": "color-mix(green + white 12%)" },
+      "greenDim":    { "value": "#0FB055", "cssVar": "--brand-green-dim",    "derivation": "color-mix(green + black 20%)" },
+      "black":       { "value": "#0A0A0A" },
+      "blackDeep":   { "value": "#050505" },
+      "white":       { "value": "#FFFFFF" }
+    },
+    "bg": {
+      "content":         { "value": "#FAFAF7", "usage": "body/page background light mode" },
+      "elevated":        { "value": "#FFFFFF", "usage": "cards light mode" },
+      "muted":           { "value": "#F4F4F1", "usage": "subtle bg, table hover rows" },
+      "sidebar":         { "value": "#11131A", "usage": "sidebar dark surface" },
+      "sidebarElevated": { "value": "#1A1C24" },
+      "sidebarHover":    { "value": "#1E2028" },
+      "deep":            { "value": "#050505" },
+      "dark":            { "value": "#0A0A0A", "usage": "login hero" },
+      "elevatedDark":    { "value": "#141414" },
+      "elevated2Dark":   { "value": "#1A1A1A" }
+    },
+    "appShell": {
+      "_note": "Estas cores mudam com data-theme. Sempre consumir via CSS var, nunca hex hardcoded.",
+      "bgDark":      { "value": "#23232C", "cssVar": "--app-bg",             "theme": "dark" },
+      "bgLight":     { "value": "#EAEAEE", "cssVar": "--app-bg",             "theme": "light" },
+      "sidebarBgDark":   { "value": "rgba(28,28,36,0.92)",   "cssVar": "--app-sidebar-bg",    "theme": "dark" },
+      "sidebarBgLight":  { "value": "rgba(255,255,255,0.95)", "cssVar": "--app-sidebar-bg",    "theme": "light" },
+      "cardBgDark":      { "value": "rgba(255,255,255,0.05)", "cssVar": "--app-card-bg",       "theme": "dark" },
+      "cardBgLight":     { "value": "rgba(255,255,255,0.92)", "cssVar": "--app-card-bg",       "theme": "light" },
+      "cardBorderDark":  { "value": "rgba(255,255,255,0.10)", "cssVar": "--app-card-border",   "theme": "dark" },
+      "cardBorderLight": { "value": "rgba(10,10,10,0.08)",    "cssVar": "--app-card-border",   "theme": "light" },
+      "pillBgDark":      { "value": "rgba(255,255,255,0.06)", "cssVar": "--app-pill-bg",       "theme": "dark" },
+      "pillBgLight":     { "value": "rgba(255,255,255,0.85)", "cssVar": "--app-pill-bg",       "theme": "light" },
+      "inputBgDark":     { "value": "rgba(255,255,255,0.04)", "cssVar": "--app-input-bg",      "theme": "dark" },
+      "inputBgLight":    { "value": "rgba(255,255,255,0.85)", "cssVar": "--app-input-bg",      "theme": "light" },
+      "fgDark":          { "value": "#FAFAFA",                "cssVar": "--app-fg",             "theme": "dark" },
+      "fgLight":         { "value": "#0A0A0A",                "cssVar": "--app-fg",             "theme": "light" },
+      "fgMutedDark":     { "value": "#A1A1AA",                "cssVar": "--app-fg-muted",       "theme": "dark" },
+      "fgMutedLight":    { "value": "#52525B",                "cssVar": "--app-fg-muted",       "theme": "light" },
+      "fgSubtleDark":    { "value": "rgba(255,255,255,0.5)",  "cssVar": "--app-fg-subtle",      "theme": "dark" },
+      "fgSubtleLight":   { "value": "#71717A",                "cssVar": "--app-fg-subtle",      "theme": "light" },
+      "spotlightDark":   { "value": "rgba(255,255,255,0.06)", "cssVar": "--app-spotlight",      "theme": "dark" },
+      "spotlightLight":  { "value": "rgba(255,255,255,0.70)", "cssVar": "--app-spotlight",      "theme": "light" }
+    },
+    "border": {
+      "subtle":         { "value": "#F0F0F0" },
+      "default":        { "value": "#EAEAEA" },
+      "strong":         { "value": "#71717A" },
+      "sidebarSubtle":  { "value": "#1E2028" },
+      "sidebarDefault": { "value": "#27292F" },
+      "darkSubtle":     { "value": "#27272A" },
+      "dark":           { "value": "#3F3F46" }
+    },
+    "fg": {
+      "onLight":         { "value": "#09090B" },
+      "onLightMuted":    { "value": "#52525B" },
+      "onLightSubtle":   { "value": "#71717A" },
+      "onDark":          { "value": "#FAFAFA" },
+      "onDarkMuted":     { "value": "#A1A1AA" },
+      "onDarkSubtle":    { "value": "#71717A" },
+      "onSidebar":       { "value": "#FAFAFA" },
+      "onSidebarMuted":  { "value": "#A1A1AA" },
+      "onSidebarSubtle": { "value": "#71717A" }
+    },
+    "status": {
+      "success": { "value": "#16DF6F" },
+      "info":    { "value": "#00A99D" },
+      "warning": { "value": "#F59E0B" },
+      "danger":  { "value": "#EF4444" }
+    },
+    "textWcag": {
+      "_note": "Cores de texto com contraste WCAG AA (4.5:1) sobre bg branco/off-white",
+      "primary": { "value": "#0A8F4D", "ratio": "~4.6:1" },
+      "info":    { "value": "#006B62", "ratio": "~4.7:1" },
+      "success": { "value": "#0A8F4D", "ratio": "~4.6:1" },
+      "warning": { "value": "#B45309", "ratio": "~4.8:1" },
+      "danger":  { "value": "#B91C1C", "ratio": "~5.2:1" },
+      "muted":   { "value": "#52525B" }
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "sans": "Lexend, ui-sans-serif, system-ui, sans-serif",
+      "mono": "JetBrains Mono, ui-monospace, SFMono-Regular, monospace"
+    },
+    "fontFeatureSettings": "\"cv11\", \"ss03\"",
+    "scale": {
+      "hero-5xl":    { "size": "120px", "lineHeight": "0.95",  "weight": 700, "letterSpacing": "-0.045em" },
+      "hero-4xl":    { "size": "96px",  "lineHeight": "0.98",  "weight": 700, "letterSpacing": "-0.04em"  },
+      "hero-3xl":    { "size": "72px",  "lineHeight": "1.02",  "weight": 700, "letterSpacing": "-0.035em" },
+      "display-2xl": { "size": "56px",  "lineHeight": "1.05",  "weight": 800, "letterSpacing": "-0.03em"  },
+      "display-xl":  { "size": "44px",  "lineHeight": "1.1",   "weight": 700, "letterSpacing": "-0.025em" },
+      "display-lg":  { "size": "36px",  "lineHeight": "1.15",  "weight": 700, "letterSpacing": "-0.02em"  },
+      "display-md":  { "size": "30px",  "lineHeight": "1.2",   "weight": 600, "letterSpacing": "-0.02em"  },
+      "h1":          { "size": "30px",  "lineHeight": "1.2",   "weight": 600, "letterSpacing": "-0.02em"  },
+      "h2":          { "size": "24px",  "lineHeight": "1.25",  "weight": 600, "letterSpacing": "-0.015em" },
+      "h3":          { "size": "20px",  "lineHeight": "1.3",   "weight": 600, "letterSpacing": "-0.01em"  },
+      "h4":          { "size": "18px",  "lineHeight": "1.4",   "weight": 600 },
+      "heading-md":  { "size": "20px",  "lineHeight": "1.3",   "weight": 600 },
+      "heading-sm":  { "size": "18px",  "lineHeight": "1.4",   "weight": 600 },
+      "lead":        { "size": "18px",  "lineHeight": "1.55",  "weight": 400 },
+      "body-lg":     { "size": "16px",  "lineHeight": "1.55",  "weight": 400 },
+      "body-md":     { "size": "14px",  "lineHeight": "1.55",  "weight": 400 },
+      "body-sm":     { "size": "13px",  "lineHeight": "1.5",   "weight": 400 },
+      "caption":     { "size": "12px",  "lineHeight": "1.4",   "weight": 500, "letterSpacing": "0.01em" },
+      "mono-display":{ "size": "48px",  "lineHeight": "1",     "weight": 600, "letterSpacing": "-0.03em" },
+      "mono-lg":     { "size": "24px",  "lineHeight": "1.1",   "weight": 500 },
+      "mono-md":     { "size": "14px",  "lineHeight": "1.4",   "weight": 500 },
+      "mono-sm":     { "size": "12px",  "lineHeight": "1.4",   "weight": 400 }
+    }
+  },
+  "spacing": {
+    "sidebarWidth":       { "value": 240,  "unit": "px" },
+    "sidebarCollapsed":   { "value": 64,   "unit": "px", "note": "reservado Era 2" },
+    "topbarHeight":       { "value": 64,   "unit": "px" },
+    "sidebarMargin":      { "value": 12,   "unit": "px", "note": "sidebar flutuante gap" },
+    "mainPaddingMobile":  { "value": 32,   "unit": "px" },
+    "mainPaddingDesktop": { "value": 48,   "unit": "px" },
+    "mainPaddingWide":    { "value": 64,   "unit": "px" },
+    "mainMaxWidth":       { "value": 1600, "unit": "px" },
+    "cardPadding":        { "value": 28,   "unit": "px" },
+    "sectionGap":         { "value": 48,   "unit": "px" },
+    "dotGridSize":        { "value": 24,   "unit": "px" }
+  },
+  "borderRadius": {
+    "sm":   { "value": "4px",   "tailwind": "rounded-sm" },
+    "md":   { "value": "8px",   "tailwind": "rounded-md", "note": "default — botões" },
+    "lg":   { "value": "12px",  "tailwind": "rounded-lg", "note": "cards white" },
+    "xl":   { "value": "16px",  "tailwind": "rounded-xl", "note": "stitch-card, modais" },
+    "2xl":  { "value": "24px",  "tailwind": "rounded-2xl","note": "sidebar, empty state icon" },
+    "full": { "value": "9999px","tailwind": "rounded-full","note": "pills, chips, badges redondos" }
+  },
+  "shadows": {
+    "xs":              "0 1px 2px rgba(0,0,0,0.04)",
+    "sm":              "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.03)",
+    "md":              "0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04)",
+    "lg":              "0 10px 30px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.05)",
+    "xl":              "0 20px 50px rgba(0,0,0,0.1), 0 10px 20px rgba(0,0,0,0.06)",
+    "glowGreen":       "0 0 0 1px rgba(22,223,111,0.2), 0 0 20px rgba(22,223,111,0.15), 0 0 40px rgba(22,223,111,0.05)",
+    "glowGreenStrong": "0 0 0 1px rgba(22,223,111,0.4), 0 0 30px rgba(22,223,111,0.3), 0 0 60px rgba(22,223,111,0.1)",
+    "cardHover":       "0 4px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(22,223,111,0.08)",
+    "focusGreen":      "0 0 0 3px rgba(22,223,111,0.12)",
+    "focusComplex":    "var(--ring-focus-complex)"
+  },
+  "animation": {
+    "duration": {
+      "fast": "150ms",
+      "base": "200ms",
+      "slow": "400ms"
+    },
+    "easing": {
+      "springOut":   "cubic-bezier(0.16, 1, 0.3, 1)",
+      "springInOut": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+  },
+  "zIndex": {
+    "dropdown":     10,
+    "sticky":       20,
+    "fixed":        30,
+    "popover":      35,
+    "modalBackdrop":40,
+    "modal":        50,
+    "toast":        60,
+    "tooltip":      70
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "defaultWeight": "regular",
+    "activeWeight": "duotone",
+    "duotoneSecondaryOpacity": 0.35,
+    "cssVar": "--phosphor-duotone-secondary-opacity",
+    "sizesUsed": [11, 12, 13, 14, 15, 16, 18, 20, 22, 48]
+  }
+}
