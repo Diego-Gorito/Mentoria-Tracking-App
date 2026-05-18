@@ -22,6 +22,11 @@ RUN npm run build
 
 # ---- Stage 2: nginx serve dist ----
 FROM nginx:alpine
+
+# Adicionar wget pro HEALTHCHECK (não vem por default em nginx:alpine)
+# Sem isso, healthcheck falha → Docker marca unhealthy → Traefik retorna 502.
+RUN apk add --no-cache wget
+
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 

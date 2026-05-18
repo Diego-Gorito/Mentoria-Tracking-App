@@ -11,6 +11,9 @@
 FROM node:22-alpine
 WORKDIR /app
 
+# Adicionar wget pro HEALTHCHECK (node:22-alpine não tem wget por default)
+RUN apk add --no-cache wget
+
 # Copiar manifests antes do código (camadas Docker mais estáveis)
 COPY package*.json ./
 
