@@ -41,6 +41,8 @@ export function useOnboarding(): UseOnboardingReturn {
   const [error, setError] = useState<string | null>(null)
   const [slugCheck, setSlugCheck] = useState<SlugCheckResult>({ status: 'idle' })
   const slugDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Ref pra acessar state atual sem refazer callback a cada change (evita churn em deps)
+  const stateRef = useRef<OnboardingState>(null)
 
   // Carrega estado inicial do servidor
   useEffect(() => {
@@ -48,10 +50,16 @@ export function useOnboarding(): UseOnboardingReturn {
     async function load() {
       try {
         const s = await onboardingApi.getState()
-        if (!cancelled) setState(s)
+        if (!cancelled) {
+          setState(s)
+          stateRef.current = s
+        }
       } catch {
         // getState pode retornar null se tenant ainda não existe — não é erro fatal
-        if (!cancelled) setState(null)
+        if (!cancelled) {
+          setState(null)
+          stateRef.current = null
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -60,11 +68,19 @@ export function useOnboarding(): UseOnboardingReturn {
     return () => { cancelled = true }
   }, [])
 
-  // checkSlug debounced 400ms
+  // checkSlug debounced 400ms.
+  // Se slug === slug atual do tenant do user, considera available sem chamar API
+  // (evita "Este slug já está em uso" pro próprio slug do user). Reportado por
+  // Diego 19/05 testando wizard com tenant pré-existente.
   const checkSlug = useCallback((slug: string) => {
     if (slugDebounceRef.current) clearTimeout(slugDebounceRef.current)
     if (!slug || slug.length < 3) {
       setSlugCheck({ status: 'idle' })
+      return
+    }
+    // Self-slug skip: se já é meu, ok
+    if (stateRef.current && slug === stateRef.current.slug) {
+      setSlugCheck({ status: 'available' })
       return
     }
     setSlugCheck({ status: 'checking' })
@@ -102,8 +118,8 @@ export function useOnboarding(): UseOnboardingReturn {
     setError(null)
     try {
       const result = await onboardingApi.createTenant(data)
-      setState((prev) => prev
-        ? { ...prev, tenant_id: result.tenant_id, slug: result.slug }
+      const newState: OnboardingState = stateRef.current
+        ? { ...stateRef.current, tenant_id: result.tenant_id, slug: result.slug }
         : {
             tenant_id: result.tenant_id,
             slug: result.slug,
@@ -111,8 +127,9 @@ export function useOnboarding(): UseOnboardingReturn {
             onboarding_step: result.onboarding_step,
             onboarding_data: {},
             completed_at: null,
-          },
-      )
+          }
+      setState(newState)
+      stateRef.current = newState  // sync ref pra self-slug check
       return true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Algo falhou ao criar a escola. Tente de novo.')

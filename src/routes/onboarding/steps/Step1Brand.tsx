@@ -146,7 +146,7 @@ export function Step1Brand({
     : undefined
 
   const slugHint = !slugError && data.slug
-    ? `Seu painel ficará em: tracking.escolaclick.com.br/${data.slug}`
+    ? `Seu painel ficará em: tracking.colegiomentoria.com.br/${data.slug}`
     : undefined
 
   const urlHint = !urlError
