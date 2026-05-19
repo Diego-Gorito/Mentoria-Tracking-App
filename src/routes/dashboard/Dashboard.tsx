@@ -78,7 +78,7 @@ export function Dashboard({ onNavigate }: Props) {
 
       {/* Sections */}
       <DashboardKpis windowDays={windowDays} />
-      <DashboardCharts />
+      <DashboardCharts period={windowDays === 7 ? '7d' : windowDays === 90 ? '90d' : '30d'} />
       <DashboardTables />
     </AppShell>
   )

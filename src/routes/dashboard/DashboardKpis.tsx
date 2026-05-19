@@ -1,6 +1,5 @@
-// DashboardKpis — 6 KPI cards do Dashboard
-// Mock data conforme spec; cores condicionais (verde/amber/vermelho) por threshold.
-// Card local — NAO usa KpiCard.tsx (que assume bg-white, este precisa dark theme).
+// DashboardKpis — 6 KPI cards com dados reais do Worker /api/analytics/summary
+// Skeleton loading + empty state quando sem dados.
 
 import { useMemo } from 'react'
 import {
@@ -12,6 +11,8 @@ import {
   Pulse,
 } from '@phosphor-icons/react'
 import type { Icon } from '@phosphor-icons/react'
+import { useAnalyticsSummary } from '@/hooks/useAnalytics'
+import type { Period } from '@/hooks/useAnalytics'
 
 type Tone = 'neutral' | 'success' | 'warning' | 'danger'
 
@@ -35,67 +36,96 @@ function formatBRL(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+function formatDelta(pct: number): { value: string; positive: boolean } | undefined {
+  if (pct === 0) return undefined
+  return {
+    value: `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`,
+    positive: pct > 0,
+  }
+}
+
+// Skeleton individual
+function KpiSkeleton() {
+  return (
+    <div
+      className="rounded-xl border p-6 flex flex-col gap-2 animate-pulse"
+      style={{ background: 'var(--app-card-bg)', borderColor: 'var(--app-card-border)' }}
+    >
+      <div className="flex items-start justify-between">
+        <div className="h-4 w-24 rounded bg-white/[0.06]" />
+        <div className="h-8 w-8 rounded-lg bg-white/[0.04]" />
+      </div>
+      <div className="h-7 w-20 rounded bg-white/[0.08]" />
+      <div className="h-3 w-32 rounded bg-white/[0.04]" />
+    </div>
+  )
+}
+
 export function DashboardKpis({ windowDays }: { windowDays: number }) {
-  // Mock data — Era 1 sprint 3 substitui por useKpis(windowDays)
+  const period: Period = windowDays === 7 ? '7d' : windowDays === 90 ? '90d' : '30d'
+  const { data, loading } = useAnalyticsSummary(period)
+
   const kpis = useMemo<KpiSpec[]>(() => {
-    const roas = 1.51
-    const dispatchPct = 97.3
-    const conversions = 83
-    const revenue = 12450
-    const spend = 8230
-    const leads = 1247
-    const cpl = spend / leads
+    if (!data) return []
+
+    const { leads_total, leads_delta_pct, conversions_total, conversions_value_brl,
+            spend_brl, roas, cpl_brl, dispatch_health_pct } = data
 
     return [
       {
         label: 'Leads totais',
-        value: leads.toLocaleString('pt-BR'),
+        value: leads_total.toLocaleString('pt-BR'),
         hint: `Ultimos ${windowDays} dias`,
         icon: Users,
-        delta: { value: '+12,4%', positive: true },
+        delta: formatDelta(leads_delta_pct),
       },
       {
         label: 'Conversoes',
-        value: conversions.toLocaleString('pt-BR'),
-        hint: formatBRL(revenue),
+        value: conversions_total.toLocaleString('pt-BR'),
+        hint: formatBRL(conversions_value_brl),
         icon: Target,
-        delta: { value: '+8,1%', positive: true },
       },
       {
         label: 'Investimento total',
-        value: formatBRL(spend),
-        hint: 'Spend Meta + Google',
+        value: formatBRL(spend_brl),
+        hint: 'Spend campanhas',
         icon: CurrencyDollar,
       },
       {
         label: 'ROAS blended',
         value: `${roas.toFixed(2)}x`,
-        hint: roas > 1 ? 'Lucrativo' : 'No prejuizo',
+        hint: roas >= 1 ? 'Lucrativo' : 'No prejuizo',
         icon: TrendUp,
-        tone: roas > 1 ? 'success' : 'danger',
-        delta: { value: '+0,12x', positive: true },
+        tone: roas >= 1 ? 'success' : 'danger',
       },
       {
         label: 'CPL blended',
-        value: formatBRL(cpl),
+        value: formatBRL(cpl_brl),
         hint: 'Custo por lead',
         icon: Receipt,
-        delta: { value: '-R$ 0,40', positive: true },
       },
       {
         label: 'Dispatch health',
-        value: `${dispatchPct.toFixed(1)}%`,
+        value: `${dispatch_health_pct.toFixed(1)}%`,
         hint: 'sent / total (24h)',
         icon: Pulse,
-        tone: dispatchPct >= 95 ? 'success' : dispatchPct >= 90 ? 'warning' : 'danger',
+        tone: dispatch_health_pct >= 95 ? 'success' : dispatch_health_pct >= 90 ? 'warning' : 'danger',
       },
     ]
-  }, [windowDays])
+  }, [data, windowDays])
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        {Array.from({ length: 6 }).map((_, i) => <KpiSkeleton key={i} />)}
+      </div>
+    )
+  }
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
       {kpis.map((k) => {
-        const Icon = k.icon
+        const KpiIcon = k.icon
         return (
           <div
             key={k.label}
@@ -108,7 +138,7 @@ export function DashboardKpis({ windowDays }: { windowDays: number }) {
                 className="h-8 w-8 rounded-lg flex items-center justify-center"
                 style={{ background: 'var(--app-pill-bg)', border: '1px solid var(--app-pill-border)' }}
               >
-                <Icon size={16} weight="duotone" className="text-fg-on-dark-muted" />
+                <KpiIcon size={16} weight="duotone" className="text-fg-on-dark-muted" />
               </div>
             </div>
             <div

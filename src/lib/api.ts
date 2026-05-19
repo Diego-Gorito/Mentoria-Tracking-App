@@ -143,6 +143,89 @@ export const queryApi = {
     }),
 }
 
+// --- Analytics endpoints (autenticados) ---
+
+export type SummaryResponse = {
+  leads_total: number
+  leads_delta_pct: number
+  conversions_total: number
+  conversions_value_brl: number
+  spend_brl: number
+  roas: number
+  cpl_brl: number
+  dispatch_health_pct: number
+  period_days: number
+}
+
+export type FunnelDay = {
+  day: string
+  sessions: number
+  leads: number
+  mql: number
+  conversions: number
+}
+
+export type RoiPlatform = {
+  platform: string
+  spend_brl: number
+  conversions: number
+  value_brl: number
+  roas: number
+}
+
+export type LeadRecent = {
+  lead_id: string
+  email_mask: string
+  phone_mask: string
+  name_mask: string
+  score: number
+  source: string
+  last_event_at: string
+  score_tier: string
+}
+
+export type DispatchFailed = {
+  dispatch_id: string
+  conversion_id: string
+  platform: string
+  retry_count: number
+  last_error: string
+  last_attempt_at: string
+  status: string
+}
+
+export type ChannelDay = {
+  day: string
+  organic: number
+  meta: number
+  google: number
+  hotmart: number
+  direct: number
+  outros: number
+}
+
+type Period = '7d' | '30d' | '90d'
+
+export const analyticsApi = {
+  summary: (period: Period = '30d') =>
+    request<SummaryResponse>(`/api/analytics/summary?period=${period}`),
+
+  funnel: (period: Period = '30d') =>
+    request<{ data: FunnelDay[] }>(`/api/analytics/funnel?period=${period}`),
+
+  roiPlatforms: (period: Period = '30d') =>
+    request<{ data: RoiPlatform[] }>(`/api/analytics/roi-platforms?period=${period}`),
+
+  leadsRecent: (limit = 20) =>
+    request<{ data: LeadRecent[] }>(`/api/analytics/leads-recent?limit=${limit}`),
+
+  dispatchesFailed: (limit = 20) =>
+    request<{ data: DispatchFailed[] }>(`/api/analytics/dispatches-failed?limit=${limit}`),
+
+  channels: (period: Period = '30d') =>
+    request<{ data: ChannelDay[] }>(`/api/analytics/channels?period=${period}`),
+}
+
 // --- Health ---
 
 export const healthApi = {

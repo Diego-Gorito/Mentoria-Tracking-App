@@ -6,6 +6,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
 import authRouter from './auth'
+import analyticsRouter from './analytics'
 import { authMiddleware, getJwtUser } from './middleware'
 import { queryOne } from './db'
 
@@ -41,6 +42,10 @@ app.get('/api/health', (c) => {
 // --- Auth (público) ---
 
 app.route('/api/auth', authRouter)
+
+// --- Analytics (autenticado, multi-tenant via authMiddleware interno) ---
+
+app.route('/api/analytics', analyticsRouter)
 
 // --- /api/me (autenticado) ---
 
