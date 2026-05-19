@@ -15,7 +15,8 @@ export type SlugCheckResult =
 
 type OnboardingActions = {
   checkSlug: (slug: string) => void
-  uploadLogo: (file: File) => Promise<string | null>
+  uploadLogo: (file: File, slug: string) => Promise<string | null>
+  createTenant: (data: { slug: string; name: string }) => Promise<boolean>
   saveStep1: (data: { name: string; slug: string; url?: string; logo_url?: string; brand_color: string }) => Promise<boolean>
   saveStep2: (trackingVerified: boolean) => Promise<boolean>
   saveStep3: (sources: string[], formPlatform?: string) => Promise<boolean>
@@ -86,12 +87,38 @@ export function useOnboarding(): UseOnboardingReturn {
     setSlugCheck({ status: 'idle' })
   }, [])
 
-  const uploadLogo = useCallback(async (file: File): Promise<string | null> => {
+  const uploadLogo = useCallback(async (file: File, slug: string): Promise<string | null> => {
     try {
-      const { url } = await onboardingApi.uploadLogo(file)
+      const { url } = await onboardingApi.uploadLogo(file, slug)
       return url
     } catch {
       return null
+    }
+  }, [])
+
+  // B3 fix: cria tenant antes de salvar step 1 quando user é novo
+  const createTenant = useCallback(async (data: { slug: string; name: string }): Promise<boolean> => {
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await onboardingApi.createTenant(data)
+      setState((prev) => prev
+        ? { ...prev, tenant_id: result.tenant_id, slug: result.slug }
+        : {
+            tenant_id: result.tenant_id,
+            slug: result.slug,
+            name: data.name,
+            onboarding_step: result.onboarding_step,
+            onboarding_data: {},
+            completed_at: null,
+          },
+      )
+      return true
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Algo falhou ao criar a escola. Tente de novo.')
+      return false
+    } finally {
+      setSaving(false)
     }
   }, [])
 
@@ -193,6 +220,7 @@ export function useOnboarding(): UseOnboardingReturn {
     actions: {
       checkSlug,
       uploadLogo,
+      createTenant,
       saveStep1,
       saveStep2,
       saveStep3,

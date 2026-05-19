@@ -261,59 +261,66 @@ export const onboardingApi = {
   getState: () =>
     request<OnboardingState>('/api/onboarding/state'),
 
+  // B1 fix: POST com body {slug} ao invés de GET querystring
   checkSlug: (slug: string) =>
     request<{ available: boolean; reason?: string; suggestion?: string }>(
-      `/api/onboarding/check-slug?slug=${encodeURIComponent(slug)}`,
+      '/api/onboarding/check-slug',
+      { method: 'POST', body: JSON.stringify({ slug }) },
     ),
 
-  checkTracking: () =>
-    request<{ received: boolean; event?: { source: string; type: string; received_at: string } }>(
-      '/api/onboarding/check-tracking',
+  // B4 fix: endpoint fantasma — retorna sempre {received: false} localmente.
+  // TODO Era 1.5: implementar endpoint real GET /api/onboarding/check-tracking
+  checkTracking: (): Promise<{ received: boolean; event?: { source: string; type: string; received_at: string } }> =>
+    Promise.resolve({ received: false }),
+
+  // B4 fix: endpoint fantasma — usa FileReader → base64 dataURL + cache localStorage.
+  // TODO Era 1.5: upload real para S3/R2 + persistir em core.tenants.logo_url
+  uploadLogo: (file: File, slug: string): Promise<{ url: string }> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = reader.result as string
+        try {
+          localStorage.setItem(`mentoria-tracking.logo-${slug}`, dataUrl)
+        } catch {
+          // localStorage quota exceeded — continua sem cache
+        }
+        resolve({ url: dataUrl })
+      }
+      reader.onerror = () => reject(new Error('Falha ao ler o arquivo de logo'))
+      reader.readAsDataURL(file)
+    }),
+
+  // B3 fix: novo endpoint create-tenant
+  createTenant: (body: { slug: string; name: string }) =>
+    request<{ tenant_id: string; slug: string; onboarding_step: number }>(
+      '/api/onboarding/create-tenant',
+      { method: 'POST', body: JSON.stringify(body) },
     ),
 
-  uploadLogo: async (file: File): Promise<{ url: string }> => {
-    const token = getToken()
-    const fd = new FormData()
-    fd.append('file', file)
-    const res = await fetch(`${WORKER_BASE}/api/onboarding/upload-logo`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: fd,
-    })
-    if (res.status === 401) {
-      clearToken()
-      window.location.href = '/login'
-      throw new Error('Unauthorized')
-    }
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`)
-    }
-    return res.json() as Promise<{ url: string }>
-  },
-
+  // B2 fix: PATCH + payload wrapped em {data: {...}}
   saveStep1: (body: Step1Body) =>
     request<{ ok: true }>('/api/onboarding/step/1', {
-      method: 'POST',
-      body: JSON.stringify(body),
+      method: 'PATCH',
+      body: JSON.stringify({ data: body }),
     }),
 
   saveStep2: (body: Step2Body) =>
     request<{ ok: true }>('/api/onboarding/step/2', {
-      method: 'POST',
-      body: JSON.stringify(body),
+      method: 'PATCH',
+      body: JSON.stringify({ data: body }),
     }),
 
   saveStep3: (body: Step3Body) =>
     request<{ ok: true }>('/api/onboarding/step/3', {
-      method: 'POST',
-      body: JSON.stringify(body),
+      method: 'PATCH',
+      body: JSON.stringify({ data: body }),
     }),
 
   saveStep4: (body: Step4Body) =>
     request<{ ok: true }>('/api/onboarding/step/4', {
-      method: 'POST',
-      body: JSON.stringify(body),
+      method: 'PATCH',
+      body: JSON.stringify({ data: body }),
     }),
 
   complete: () =>

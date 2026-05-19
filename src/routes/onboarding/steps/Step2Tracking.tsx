@@ -1,10 +1,10 @@
-// Step2Tracking.tsx — Script de Tracking + polling automático
-// Polling GET /api/onboarding/check-tracking a cada 10s, máx 5 min.
-// 3 estados: waiting / received / timeout via StepPolling.
+// Step2Tracking.tsx — Script de Tracking
+// Era 1 MVP: sem polling automático (endpoint /check-tracking não implementado).
+// Usuário instala o snippet e clica "Continuar mesmo assim" para avançar.
+// TODO Era 1.5: reativar polling real quando GET /api/onboarding/check-tracking existir.
 // Callout WordPress colapsável.
 
-import { useEffect, useId, useRef, useState } from 'react'
-import { onboardingApi } from '@/lib/api'
+import { useId, useState } from 'react'
 import { CodeBlock } from '@/components/ui/CodeBlock'
 import { StepPolling } from '@/components/ui/StepPolling'
 
@@ -15,9 +15,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 })(window,document,'script','dataLayer','GTM-PPVPWNXG');</script>
 <!-- Fim Google Tag Manager -->`
-
-const POLL_INTERVAL_MS = 10_000
-const POLL_MAX_MS = 5 * 60 * 1000 // 5 min
 
 type PollingStatus = 'waiting' | 'received' | 'timeout'
 
@@ -30,70 +27,24 @@ type Props = {
 export function Step2Tracking({ onVerified }: Props) {
   const uid = useId()
   const [wpOpen, setWpOpen] = useState(true)
-  const [pollingStatus, setPollingStatus] = useState<PollingStatus>('waiting')
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const [receivedEvent, setReceivedEvent] = useState<ReceivedEvent | undefined>()
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const startTimeRef = useRef(Date.now())
-  const pollingRef = useRef(true)
-
-  async function doPoll() {
-    if (!pollingRef.current) return
-    try {
-      const result = await onboardingApi.checkTracking()
-      if (result.received) {
-        setPollingStatus('received')
-        setReceivedEvent(result.event as ReceivedEvent | undefined)
-        onVerified(true)
-        stopPolling()
-      } else if (Date.now() - startTimeRef.current >= POLL_MAX_MS) {
-        setPollingStatus('timeout')
-        stopPolling()
-      }
-    } catch {
-      // silently ignore network error during polling
-    }
-  }
-
-  function stopPolling() {
-    pollingRef.current = false
-    if (pollTimerRef.current) clearInterval(pollTimerRef.current)
-    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)
-  }
-
-  function startPolling() {
-    pollingRef.current = true
-    startTimeRef.current = Date.now()
-    setElapsedSeconds(0)
-    setPollingStatus('waiting')
-    pollTimerRef.current = setInterval(doPoll, POLL_INTERVAL_MS)
-    elapsedTimerRef.current = setInterval(
-      () => setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000)),
-      1000,
-    )
-    // Poll imediato na primeira vez
-    void doPoll()
-  }
-
-  useEffect(() => {
-    startPolling()
-    return () => stopPolling()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Era 1 MVP: status fixo em 'waiting' — sem polling real.
+  // Usuário usa botão "Continuar mesmo assim" no footer do Wizard.
+  const pollingStatus: PollingStatus = 'waiting'
+  const elapsedSeconds = 0
+  const receivedEvent: ReceivedEvent | undefined = undefined
 
   function handleForceCheck() {
-    void doPoll()
+    // Era 1 MVP: verificação manual não implementada — botão inativo.
+    // TODO Era 1.5: chamar GET /api/onboarding/check-tracking real aqui.
   }
 
   function handleContinueAnyway() {
-    stopPolling()
     onVerified(false)
   }
 
   function handleRetry() {
-    stopPolling()
-    startPolling()
+    // Era 1 MVP: sem retry de polling.
+    // TODO Era 1.5: reiniciar intervalo de polling real aqui.
   }
 
   return (

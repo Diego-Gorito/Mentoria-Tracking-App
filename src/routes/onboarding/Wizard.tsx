@@ -120,12 +120,14 @@ export function Wizard({ onNavigate }: Props) {
   async function handleLogoUpload(file: File): Promise<string | null> {
     setLogoUploadError(null)
     setLogoUploading(true)
-    const url = await actions.uploadLogo(file)
+    // Passa slug atual (ou slug do server) para cache localStorage (B4 fix)
+    const slug = step1Data.slug || serverState?.slug || 'unknown'
+    const url = await actions.uploadLogo(file, slug)
     setLogoUploading(false)
     if (!url) {
       setLogoUploadError('Falha ao enviar. Tente de novo.')
     } else {
-      toast('Logo enviado com sucesso', 'success')
+      toast('Logo salvo localmente', 'success')
     }
     return url
   }
@@ -139,6 +141,16 @@ export function Wizard({ onNavigate }: Props) {
       if (!step1Data.name.trim()) return
       if (!step1Data.slug || step1Data.slug.length < 3) return
       if (slugCheck.status === 'unavailable') return
+
+      // B3 fix: criar tenant antes de salvar dados do step, apenas se ainda não existe
+      if (serverState === null) {
+        const tenantCreated = await actions.createTenant({
+          slug: step1Data.slug,
+          name: step1Data.name,
+        })
+        if (!tenantCreated) return
+      }
+
       const ok = await actions.saveStep1({
         name: step1Data.name,
         slug: step1Data.slug,
@@ -248,9 +260,25 @@ export function Wizard({ onNavigate }: Props) {
             className="flex gap-2 mb-8 overflow-x-auto pb-2"
           >
             {STEPS.map((s) => {
-              const isDone = s.id < currentStep
+              // B5 fix: determinar isDone por onboarding_data, não apenas por currentStep
+              const od = serverState?.onboarding_data
+              const stepDoneMap: Record<number, boolean> = {
+                1: Boolean(od?.brand) || Boolean(od?.name),
+                2: od?.tracking_verified === true,
+                3: (Array.isArray(od?.sources) && (od.sources as string[]).length > 0)
+                  || od?.skipped_sources === true,
+                4: Array.isArray(od?.platforms_configured),
+                5: Boolean(serverState?.completed_at),
+              }
+              // B5 fix: step é "done-skip" quando foi completado via pular (sem dados reais)
+              const stepSkippedMap: Record<number, boolean> = {
+                3: od?.skipped_sources === true && !(Array.isArray(od?.sources) && (od.sources as string[]).length > 0),
+                4: Array.isArray(od?.platforms_configured) && (od.platforms_configured as string[]).length === 0,
+              }
+              const isDone = stepDoneMap[s.id] ?? false
+              const isSkipped = stepSkippedMap[s.id] ?? false
               const isActive = s.id === currentStep
-              const isFuture = s.id > currentStep
+              const isFuture = !isDone && s.id > currentStep
               return (
                 <div
                   key={s.id}
@@ -267,8 +295,12 @@ export function Wizard({ onNavigate }: Props) {
                         : 'text-fg-on-dark-subtle'
                   }`}
                 >
-                  {isDone ? (
+                  {isDone && !isSkipped ? (
+                    // Done com dados reais: CheckCircle verde fill
                     <CheckCircle size={14} weight="fill" className="text-brand-green shrink-0" aria-hidden="true" />
+                  ) : isDone && isSkipped ? (
+                    // Skipped/pulado: CheckCircle outline cinza (completou mas pulou)
+                    <CheckCircle size={14} weight="regular" className="text-fg-on-dark-subtle shrink-0" aria-hidden="true" />
                   ) : (
                     <span
                       className={`h-5 w-5 rounded-full flex items-center justify-center text-caption font-mono shrink-0 ${
