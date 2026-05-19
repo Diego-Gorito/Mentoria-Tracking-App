@@ -1,8 +1,5 @@
-// auth.ts — Hono router /api/auth/*
-// Routes: POST /signup, POST /login, POST /magic-link
-// LGPD: user_id em logs, NUNCA email.
-// bcrypt cost=10 (bcryptjs pure JS — sem native bindings, Docker alpine safe).
-
+// auth.ts — Hono router /api/auth/* (signup / login / magic-link)
+// LGPD: user_id em logs, NUNCA email. bcryptjs pure JS (alpine safe).
 import { Hono } from 'hono'
 import bcrypt from 'bcryptjs'
 import { randomBytes, createHash } from 'node:crypto'
@@ -12,19 +9,9 @@ import { signToken } from './jwt'
 const BCRYPT_COST = 10
 const MAGIC_LINK_TTL_MINS = 15
 
-// --- Validadores ---
-
-function isValidEmail(v: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
-}
-
-function isValidPassword(v: string): boolean {
-  return typeof v === 'string' && v.length >= 8
-}
-
-function isValidSlug(v: string): boolean {
-  return /^[a-z0-9-]+$/.test(v)
-}
+const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+const isValidPassword = (v: string) => typeof v === 'string' && v.length >= 8
+const isValidSlug = (v: string) => /^[a-z0-9-]+$/.test(v)
 
 // --- Tipos internos ---
 
@@ -279,7 +266,14 @@ authRouter.post('/magic-link', async (c) => {
     const tokenHash = createHash('sha256').update(tokenRaw).digest('hex')
     const expiresAt = new Date(Date.now() + MAGIC_LINK_TTL_MINS * 60 * 1000)
 
-    // Upsert magic link (cria tabela se necessário — Dara migra formalmente)
+    // Garantir tabela existe (Dara vai migrar formalmente; DDL idempotente aqui é seguro)
+    await query(`CREATE TABLE IF NOT EXISTS core.magic_links (
+      user_id    uuid PRIMARY KEY REFERENCES core.users(user_id) ON DELETE CASCADE,
+      token_hash text NOT NULL,
+      expires_at timestamptz NOT NULL,
+      used_at    timestamptz
+    )`).catch(() => { /* ignora se já existe */ })
+
     await query(
       `INSERT INTO core.magic_links (user_id, token_hash, expires_at, used_at)
        VALUES ($1, $2, $3, NULL)
@@ -288,25 +282,7 @@ authRouter.post('/magic-link', async (c) => {
              expires_at = EXCLUDED.expires_at,
              used_at = NULL`,
       [user.user_id, tokenHash, expiresAt.toISOString()],
-    ).catch(async () => {
-      // Tabela pode nao existir ainda — criar inline
-      await query(`
-        CREATE TABLE IF NOT EXISTS core.magic_links (
-          user_id   uuid PRIMARY KEY REFERENCES core.users(user_id) ON DELETE CASCADE,
-          token_hash text NOT NULL,
-          expires_at timestamptz NOT NULL,
-          used_at    timestamptz
-        )`)
-      await query(
-        `INSERT INTO core.magic_links (user_id, token_hash, expires_at, used_at)
-         VALUES ($1, $2, $3, NULL)
-         ON CONFLICT (user_id) DO UPDATE
-           SET token_hash = EXCLUDED.token_hash,
-               expires_at = EXCLUDED.expires_at,
-               used_at = NULL`,
-        [user.user_id, tokenHash, expiresAt.toISOString()],
-      )
-    })
+    )
 
     // Enviar email (best-effort)
     sendMagicLinkEmail(email, tokenRaw).catch((err) =>
