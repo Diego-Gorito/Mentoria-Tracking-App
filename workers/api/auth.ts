@@ -122,9 +122,11 @@ authRouter.post('/signup', async (c) => {
       ).rows[0]
 
       if (!tenantRow) {
+        // sql/49 adicionou CHECK (onboarding_step BETWEEN 1 AND 5) com DEFAULT 1.
+        // NÃO inserir onboarding_step=0 (viola constraint). Deixar default 1.
         const tenantRows = await client.query<TenantRow>(
-          `INSERT INTO core.tenants (slug, name, plan, status, onboarding_step)
-           VALUES ($1, $2, 'free', 'active', 0)
+          `INSERT INTO core.tenants (slug, name, plan, status)
+           VALUES ($1, $2, 'free', 'active')
            RETURNING tenant_id, slug, name, onboarding_step`,
           [slug, name || slug],
         )
