@@ -1,357 +1,417 @@
-// Onboarding Wizard — 5 steps
-// Step 1 (Brand): nome, slug, URL, logo preview, cor preset — implementado
-// Steps 2-5: placeholder "Em construcao"
-// WCAG AA: labels, aria-*, focus ring. 300 linhas max.
+// Wizard.tsx — Onboarding de 5 steps com state machine + autosave + load on mount
+// Sem AppShell — header minimal próprio (spec Uma §2).
+// Progress bar: role=progressbar. Steps nav: role=tablist/tab.
+// Focus move pra h2 de cada step ao avançar (via useEffect + stepRef).
+// beforeunload → ConfirmDialog de saída.
 
-import { useState, useId, useRef, useEffect } from 'react'
-import { AppShell } from '@/components/layout/AppShell'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { CheckCircle } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/Button'
-import { Field } from '@/components/ui/Field'
-import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Logo } from '@/components/ui/Logo'
 import { useToast } from '@/components/ui/Toast'
-import { CheckCircle, WarningCircle } from '@phosphor-icons/react'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useOnboarding } from '@/hooks/useOnboarding'
+import { Step1Brand, type Step1Data } from './steps/Step1Brand'
+import { Step2Tracking } from './steps/Step2Tracking'
+import { Step3Sources, type Step3Data } from './steps/Step3Sources'
+import { Step4Ads } from './steps/Step4Ads'
+import { Step5Done } from './steps/Step5Done'
+import type { PlatformId } from '@/routes/settings/platforms'
 
 const STEPS = [
-  { id: 1, label: 'Sua Escola',          short: 'Brand' },
-  { id: 2, label: 'Script de Tracking',  short: 'Tracking' },
-  { id: 3, label: 'Conversoes',          short: 'Conversoes' },
-  { id: 4, label: 'Contas de Anuncios',  short: 'Ads' },
-  { id: 5, label: 'Pronto!',             short: 'Done' },
+  { id: 1, label: 'Sua Escola', short: 'Brand' },
+  { id: 2, label: 'Script de Tracking', short: 'Tracking' },
+  { id: 3, label: 'Conversões', short: 'Conversões' },
+  { id: 4, label: 'Contas de Anúncios', short: 'Ads' },
+  { id: 5, label: 'Pronto!', short: 'Done' },
 ]
-
-const COLOR_PRESETS = [
-  { label: 'Verde',   value: '#16DF6F', var: '--brand-green', bg: 'bg-[#16DF6F]' },
-  { label: 'Azul',    value: '#3B82F6', var: '--brand-green', bg: 'bg-blue-500' },
-  { label: 'Roxo',    value: '#8B5CF6', var: '--brand-green', bg: 'bg-violet-500' },
-  { label: 'Laranja', value: '#F97316', var: '--brand-green', bg: 'bg-orange-500' },
-]
-
-const SLUG_CONFLICTS = new Set(['mentoria', 'zerohum', 'ifrn'])
-
-function slugify(v: string): string {
-  return v
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-}
 
 type Props = {
   onComplete?: () => void
   onNavigate?: (href: string) => void
 }
 
-export function Wizard({ onComplete, onNavigate }: Props) {
-  const uid = useId()
+export function Wizard({ onNavigate }: Props) {
+  function navigate(href: string) { onNavigate?.(href) }
   const { toast } = useToast()
+  const confirm = useConfirm()
+  const { state: serverState, loading, saving, slugCheck, actions } = useOnboarding()
+
+  // Step atual — sincroniza com server state ao montar
   const [currentStep, setCurrentStep] = useState(1)
+  const [hasResumed, setHasResumed] = useState(false)
 
-  // Step 1 state — pré-popula do signup localStorage
-  const [nome, setNome] = useState(() => localStorage.getItem('mentoria-tracking.signup-company') ?? '')
-  const [slug, setSlug] = useState(() => localStorage.getItem('mentoria-tracking.signup-slug') ?? '')
-  const [slugManual, setSlugManual] = useState(false)
-  const [slugConflict, setSlugConflict] = useState(false)
-  const [url, setUrl] = useState('')
-  const [logoFile, setLogoFile] = useState<File | null>(null)
-  const [logoPreview, setLogoPreview] = useState<string | null>(null)
-  const [colorIdx, setColorIdx] = useState(0)
-  const [touched, setTouched] = useState<Record<string, boolean>>({})
-  const [saving, setSaving] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
+  // Step 1
+  const [step1Data, setStep1Data] = useState<Step1Data>({
+    name: localStorage.getItem('mentoria-tracking.signup-company') ?? '',
+    slug: localStorage.getItem('mentoria-tracking.signup-slug') ?? '',
+    url: '',
+    logoUrl: null,
+    brandColor: '#16DF6F',
+  })
+  const [step1Touched, setStep1Touched] = useState<Record<string, boolean>>({})
+  const [logoUploadError, setLogoUploadError] = useState<string | null>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
 
-  // Aplica cor preset no CSS var
+  // Step 2
+  const [trackingVerified, setTrackingVerified] = useState(false)
+
+  // Step 3
+  const [step3Data, setStep3Data] = useState<Step3Data>({ sources: [] })
+  const [step3ShowAlert, setStep3ShowAlert] = useState(false)
+  const [skippedSources, setSkippedSources] = useState(false)
+
+  // Step 4
+  const [configuredPlatforms, setConfiguredPlatforms] = useState<PlatformId[]>([])
+
+  // Focus management — move foco para o h2 do step ao avançar
+  const stepContentRef = useRef<HTMLDivElement | null>(null)
+
+  // Ao carregar server state, sincronizar step + dados
   useEffect(() => {
-    document.documentElement.style.setProperty('--brand-green', COLOR_PRESETS[colorIdx].value)
-  }, [colorIdx])
+    if (!serverState || hasResumed) return
+    const step = serverState.onboarding_step ?? 1
+    if (step > 1) {
+      setCurrentStep(step)
+      toast(`Retomando de onde você parou — Etapa ${step}`, 'info')
+      setHasResumed(true)
+    }
+    if (serverState.name) {
+      setStep1Data((d) => ({
+        ...d,
+        name: serverState.name,
+        slug: serverState.slug,
+      }))
+    }
+  }, [serverState, hasResumed, toast])
 
-  // Auto-slug quando nome muda (se nao editado manualmente)
+  // Redirect se onboarding já completo
   useEffect(() => {
-    if (!slugManual) setSlug(slugify(nome))
-  }, [nome, slugManual])
+    if (serverState?.completed_at) {
+      navigate('/dashboard')
+    }
+  }, [serverState, navigate])
 
-  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setLogoFile(file)
-    const reader = new FileReader()
-    reader.onload = (ev) => setLogoPreview(ev.target?.result as string)
-    reader.readAsDataURL(file)
+  // Focar h2 ao mudar step
+  useEffect(() => {
+    const h2 = stepContentRef.current?.querySelector('h2') as HTMLElement | null
+    if (h2) {
+      h2.setAttribute('tabindex', '-1')
+      h2.focus()
+    }
+  }, [currentStep])
+
+  // beforeunload guard
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    if (currentStep > 1) {
+      window.addEventListener('beforeunload', handleBeforeUnload)
+    }
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [currentStep])
+
+  function handleStep1Blur(field: string) {
+    setStep1Touched((t) => ({ ...t, [field]: true }))
   }
 
-  function handleSlugChange(v: string) {
-    setSlugManual(true)
-    const clean = slugify(v)
-    setSlug(clean)
-    setSlugConflict(SLUG_CONFLICTS.has(clean))
+  async function handleLogoUpload(file: File): Promise<string | null> {
+    setLogoUploadError(null)
+    setLogoUploading(true)
+    const url = await actions.uploadLogo(file)
+    setLogoUploading(false)
+    if (!url) {
+      setLogoUploadError('Falha ao enviar. Tente de novo.')
+    } else {
+      toast('Logo enviado com sucesso', 'success')
+    }
+    return url
   }
 
-  function blurSlug() {
-    setTouched((t) => ({ ...t, slug: true }))
-    if (slug === 'demo' || slug === 'test') setSlugConflict(false)
-    else setSlugConflict(SLUG_CONFLICTS.has(slug))
+  const handleSlugChange = useCallback(actions.checkSlug, [actions.checkSlug])
+
+  // Validação e save por step
+  async function handleNext() {
+    if (currentStep === 1) {
+      setStep1Touched({ name: true, slug: true })
+      if (!step1Data.name.trim()) return
+      if (!step1Data.slug || step1Data.slug.length < 3) return
+      if (slugCheck.status === 'unavailable') return
+      const ok = await actions.saveStep1({
+        name: step1Data.name,
+        slug: step1Data.slug,
+        url: step1Data.url || undefined,
+        logo_url: step1Data.logoUrl ?? undefined,
+        brand_color: step1Data.brandColor,
+      })
+      if (!ok) return
+      toast('Etapa 1 salva!', 'success')
+      setCurrentStep(2)
+    } else if (currentStep === 2) {
+      const ok = await actions.saveStep2(trackingVerified)
+      if (!ok) return
+      toast('Etapa 2 salva!', 'success')
+      setCurrentStep(3)
+    } else if (currentStep === 3) {
+      if (!skippedSources && step3Data.sources.length === 0) {
+        setStep3ShowAlert(true)
+        return
+      }
+      const ok = await actions.saveStep3(step3Data.sources, step3Data.formPlatform)
+      if (!ok) return
+      toast('Etapa 3 salva!', 'success')
+      setCurrentStep(4)
+    } else if (currentStep === 4) {
+      const ok = await actions.saveStep4(configuredPlatforms.map((p) => p as string))
+      if (!ok) return
+      toast('Etapa 4 salva!', 'success')
+      setCurrentStep(5)
+    }
   }
 
-  const slugError =
-    (touched.slug && !slug)
-      ? 'Slug obrigatorio'
-      : slugConflict
-        ? 'Este slug ja esta em uso. Escolha outro.'
-        : undefined
-
-  const nomeError = touched.nome && !nome.trim() ? 'Nome obrigatorio' : undefined
-
-  async function saveStep1() {
-    setTouched({ nome: true, slug: true })
-    if (!nome.trim() || !slug || slugConflict) return
-    setSaving(true)
-    await new Promise((r) => setTimeout(r, 500))
-    localStorage.setItem('mentoria-tracking.wizard-nome', nome.trim())
-    localStorage.setItem('mentoria-tracking.wizard-slug', slug)
-    localStorage.setItem('mentoria-tracking.wizard-url', url)
-    localStorage.setItem('mentoria-tracking.wizard-color', COLOR_PRESETS[colorIdx].value)
-    if (logoFile) localStorage.setItem('mentoria-tracking.wizard-logo-name', logoFile.name)
-    toast('Etapa 1 salva!', 'success')
-    setSaving(false)
-    setCurrentStep(2)
-  }
-
-  function nextStep() {
-    if (currentStep === 1) { saveStep1(); return }
-    if (currentStep === STEPS.length) { onComplete?.(); return }
-    setCurrentStep((s) => s + 1)
-  }
-
-  function prevStep() {
+  function handlePrev() {
     if (currentStep > 1) setCurrentStep((s) => s - 1)
   }
 
-  const isLast = currentStep === STEPS.length
+  async function handleExitWizard() {
+    const ok = await confirm({
+      title: 'Sair do setup?',
+      message: 'Seu progresso até aqui foi salvo. Retome quando quiser em Configurações → Setup inicial.',
+      confirmLabel: 'Sair mesmo assim',
+      cancelLabel: 'Continuar configurando',
+    })
+    if (ok) navigate('/dashboard')
+  }
+
+  async function handleSaveAndLeave() {
+    // Salva progresso atual e redireciona
+    await handleExitWizard()
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
+      </div>
+    )
+  }
 
   return (
-    <AppShell activePath="/onboarding" onNavigate={onNavigate}>
-      <div className="max-w-2xl mx-auto">
-
-        {/* Progress header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-3">
-            <StatusBadge status="info">Onboarding</StatusBadge>
-            <span className="text-body-sm text-fg-on-dark-muted">
-              Passo {currentStep} de {STEPS.length}
-            </span>
-          </div>
-          <div className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden" role="progressbar" aria-valuenow={currentStep} aria-valuemin={1} aria-valuemax={STEPS.length}>
-            <div
-              className="h-full rounded-full bg-brand-green transition-all duration-slow"
-              style={{ width: `${(currentStep / STEPS.length) * 100}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Steps nav */}
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2" role="tablist">
-          {STEPS.map((s) => {
-            const isDone = s.id < currentStep
-            const isActive = s.id === currentStep
-            return (
-              <div
-                key={s.id}
-                role="tab"
-                aria-selected={isActive}
-                aria-label={`Etapa ${s.id}: ${s.label}`}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-body-sm whitespace-nowrap shrink-0 transition-colors ${
-                  isActive
-                    ? 'bg-brand-green/10 text-brand-green border border-brand-green/20'
-                    : isDone
-                      ? 'text-fg-on-dark-muted'
-                      : 'text-fg-on-dark-subtle'
-                }`}
-              >
-                {isDone ? (
-                  <CheckCircle size={14} weight="fill" className="text-brand-green shrink-0" />
-                ) : (
-                  <span
-                    className={`h-5 w-5 rounded-full flex items-center justify-center text-caption font-mono shrink-0 ${
-                      isActive ? 'bg-brand-green text-brand-black' : 'bg-white/[0.08]'
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {s.id}
-                  </span>
-                )}
-                <span className="hidden sm:inline">{s.short}</span>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Step content */}
-        <div
-          className="rounded-xl border p-8 mb-6"
-          style={{ background: 'var(--app-card-bg)', borderColor: 'var(--app-card-border)' }}
+    <div
+      className="min-h-screen flex flex-col"
+      style={{ background: 'var(--app-bg)' }}
+    >
+      {/* Header minimal */}
+      <header className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+        <Logo size="sm" />
+        <button
+          type="button"
+          onClick={handleExitWizard}
+          className="text-body-sm text-fg-on-dark-muted hover:text-fg-on-dark transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-green rounded"
         >
-          {currentStep === 1 && (
-            <section aria-labelledby={`${uid}-step1-title`}>
-              <h2 id={`${uid}-step1-title`} className="text-h2 font-semibold text-fg-on-dark mb-1">
-                Sua Escola
-              </h2>
-              <p className="text-body-md text-fg-on-dark-muted mb-6">
-                Identidade da sua escola no painel de tracking.
-              </p>
+          Sair do wizard
+        </button>
+      </header>
 
-              <div className="flex flex-col gap-4">
-                <Field
-                  id={`${uid}-nome`}
-                  label="Nome da escola"
-                  type="text"
-                  required
-                  placeholder="Ex: Cursinho Exemplo"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  onBlur={() => setTouched((t) => ({ ...t, nome: true }))}
-                  error={nomeError}
-                />
+      {/* Conteúdo principal */}
+      <main className="flex-1 px-4 py-8">
+        <div className="max-w-2xl mx-auto">
 
-                <Field
-                  id={`${uid}-slug`}
-                  label="Slug (identificador URL)"
-                  type="text"
-                  required
-                  placeholder="cursinho-exemplo"
-                  value={slug}
-                  onChange={(e) => handleSlugChange(e.target.value)}
-                  onBlur={blurSlug}
-                  error={slugError}
-                  hint={!slugError ? `URL: tracking.escola.click/${slug || '...'}` : undefined}
-                  suffix={
-                    slug && !slugError ? (
-                      <CheckCircle size={14} className="text-brand-green" aria-label="Slug disponivel" />
-                    ) : slug && slugError ? (
-                      <WarningCircle size={14} className="text-red-400" aria-label="Slug indisponivel" />
-                    ) : null
-                  }
-                />
+          {/* Progress bar */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-body-sm text-fg-on-dark-muted">
+                Etapa {currentStep} de {STEPS.length}
+              </span>
+            </div>
+            <div
+              role="progressbar"
+              aria-valuenow={currentStep}
+              aria-valuemin={1}
+              aria-valuemax={STEPS.length}
+              aria-label="Progresso do setup"
+              className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden"
+            >
+              <div
+                className="h-full rounded-full bg-brand-green transition-all duration-slow"
+                style={{ width: `${(currentStep / STEPS.length) * 100}%` }}
+              />
+            </div>
+          </div>
 
-                <Field
-                  id={`${uid}-url`}
-                  label="URL do site (opcional)"
-                  type="url"
-                  placeholder="https://cursinho.com.br"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                />
-
-                {/* Upload de logo */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-body-sm font-medium text-fg-on-dark-muted">
-                    Logo (opcional)
-                  </label>
-                  <div className="flex items-center gap-3">
-                    {logoPreview ? (
-                      <img
-                        src={logoPreview}
-                        alt="Preview do logo"
-                        className="h-12 w-12 rounded-lg object-cover border border-white/10"
-                      />
-                    ) : (
-                      <div
-                        className="h-12 w-12 rounded-lg border border-dashed border-white/20 flex items-center justify-center text-fg-on-dark-subtle text-caption"
-                        aria-hidden="true"
-                      >
-                        Logo
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => fileRef.current?.click()}
-                      className="text-body-sm text-brand-green hover:text-brand-green/80 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-green rounded"
+          {/* Steps nav */}
+          <div
+            role="tablist"
+            aria-label="Etapas do onboarding"
+            className="flex gap-2 mb-8 overflow-x-auto pb-2"
+          >
+            {STEPS.map((s) => {
+              const isDone = s.id < currentStep
+              const isActive = s.id === currentStep
+              const isFuture = s.id > currentStep
+              return (
+                <div
+                  key={s.id}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-disabled={isFuture}
+                  aria-label={`Etapa ${s.id}: ${s.label}`}
+                  tabIndex={-1}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-body-sm whitespace-nowrap shrink-0 transition-colors ${
+                    isActive
+                      ? 'bg-brand-green/10 text-brand-green border border-brand-green/20'
+                      : isDone
+                        ? 'text-fg-on-dark-muted'
+                        : 'text-fg-on-dark-subtle'
+                  }`}
+                >
+                  {isDone ? (
+                    <CheckCircle size={14} weight="fill" className="text-brand-green shrink-0" aria-hidden="true" />
+                  ) : (
+                    <span
+                      className={`h-5 w-5 rounded-full flex items-center justify-center text-caption font-mono shrink-0 ${
+                        isActive ? 'bg-brand-green text-brand-black' : 'bg-white/[0.08]'
+                      }`}
+                      aria-hidden="true"
                     >
-                      {logoFile ? 'Trocar imagem' : 'Enviar logo'}
-                    </button>
-                    {logoFile && (
-                      <span className="text-caption text-fg-on-dark-subtle truncate max-w-[120px]">
-                        {logoFile.name}
-                      </span>
-                    )}
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      id={`${uid}-logo`}
-                      accept="image/*"
-                      aria-label="Upload de logo"
-                      className="sr-only"
-                      onChange={handleLogoChange}
-                    />
-                  </div>
+                      {s.id}
+                    </span>
+                  )}
+                  <span className="hidden sm:inline">{s.short}</span>
                 </div>
+              )
+            })}
+          </div>
 
-                {/* Cor preset */}
-                <div className="flex flex-col gap-2">
-                  <span className="text-body-sm font-medium text-fg-on-dark-muted">
-                    Cor do painel
-                  </span>
-                  <div className="flex gap-3" role="radiogroup" aria-label="Escolha a cor do painel">
-                    {COLOR_PRESETS.map((c, i) => (
-                      <button
-                        key={c.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={colorIdx === i}
-                        aria-label={c.label}
-                        onClick={() => setColorIdx(i)}
-                        className={`h-8 w-8 rounded-full ${c.bg} transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-green ${
-                          colorIdx === i ? 'ring-2 ring-white/60 ring-offset-2 ring-offset-transparent scale-110' : 'hover:scale-105'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
+          {/* Step content */}
+          <div
+            ref={stepContentRef}
+            className="rounded-xl border p-8 mb-6"
+            style={{
+              background: 'var(--app-card-bg)',
+              borderColor: 'var(--app-card-border)',
+            }}
+          >
+            {currentStep === 1 && (
+              <Step1Brand
+                initial={step1Data}
+                slugCheck={slugCheck}
+                onSlugChange={handleSlugChange}
+                onSlugBlur={actions.checkSlug}
+                onLogoUpload={handleLogoUpload}
+                onChange={setStep1Data}
+                touched={step1Touched}
+                onBlur={handleStep1Blur}
+                uploadError={logoUploadError}
+                uploadLoading={logoUploading}
+              />
+            )}
 
-          {currentStep > 1 && (
-            <div>
-              <h2 className="text-h2 font-semibold text-fg-on-dark mb-2">
-                {STEPS[currentStep - 1].label}
-              </h2>
-              <p className="text-body-md text-fg-on-dark-muted mb-8">
-                {currentStep === 2 && 'Instale o GTM Web no seu site.'}
-                {currentStep === 3 && 'Configure suas fontes de conversao (Hotmart, formularios, Chatwoot).'}
-                {currentStep === 4 && 'Conecte suas contas de anuncios (Meta, Pinterest, Google Ads...).'}
-                {currentStep === 5 && 'Tudo pronto! Acesse seu dashboard de tracking.'}
-              </p>
-              <div className="rounded-lg border border-dashed border-white/10 p-8 text-center">
-                <p className="text-body-sm text-fg-on-dark-subtle">
-                  Em construcao &mdash; Script de Tracking &mdash; Sprint 2
-                </p>
-                {currentStep === 2 && (
-                  <pre className="mt-4 p-4 rounded-lg bg-black/40 text-brand-green text-body-sm text-left overflow-x-auto">
-                    {'<!-- Adicione no <head> do seu site -->\n<script>/* GTM snippet sera gerado aqui */</script>'}
-                  </pre>
-                )}
-              </div>
+            {currentStep === 2 && (
+              <Step2Tracking
+                onVerified={(v) => {
+                  setTrackingVerified(v)
+                  if (v) {
+                    // auto-advance not done here — user clicks CTA
+                  }
+                }}
+              />
+            )}
+
+            {currentStep === 3 && (
+              <Step3Sources
+                initial={step3Data}
+                showAlert={step3ShowAlert}
+                onChange={(d) => {
+                  setStep3Data(d)
+                  setStep3ShowAlert(false)
+                }}
+              />
+            )}
+
+            {currentStep === 4 && (
+              <Step4Ads
+                sources={step3Data.sources}
+                configuredPlatforms={configuredPlatforms}
+                onConfigured={setConfiguredPlatforms}
+                onSkipAll={async () => {
+                  const ok = await actions.saveStep4([])
+                  if (ok) {
+                    toast('Etapa 4 salva!', 'success')
+                    setCurrentStep(5)
+                  }
+                }}
+              />
+            )}
+
+            {currentStep === 5 && (
+              <Step5Done
+                name={step1Data.name || serverState?.name || ''}
+                slug={step1Data.slug || serverState?.slug || ''}
+                trackingVerified={trackingVerified}
+                sources={step3Data.sources}
+                configuredPlatforms={configuredPlatforms}
+                saving={saving}
+                onComplete={actions.complete}
+              />
+            )}
+          </div>
+
+          {/* Footer de ações — não aparece no step 5 (tem CTA próprio) */}
+          {currentStep < 5 && (
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <Button
+                variant="ghost"
+                type="button"
+                onClick={handlePrev}
+                disabled={currentStep === 1}
+              >
+                Voltar
+              </Button>
+
+              {currentStep >= 2 && (
+                <button
+                  type="button"
+                  onClick={handleSaveAndLeave}
+                  className="text-body-sm text-fg-on-dark-subtle hover:text-fg-on-dark-muted transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-green rounded"
+                >
+                  Salvar e terminar depois
+                </button>
+              )}
+
+              {/* Botão "Pular" apenas no step 3 */}
+              {currentStep === 3 && (
+                <Button
+                  variant="ghost"
+                  type="button"
+                  onClick={() => {
+                    setSkippedSources(true)
+                    void actions.saveStep3([]).then((ok) => {
+                      if (ok) setCurrentStep(4)
+                    })
+                  }}
+                  disabled={saving}
+                >
+                  Ainda não sei — configurar depois
+                </Button>
+              )}
+
+              <Button
+                type="button"
+                onClick={handleNext}
+                loading={saving}
+                disabled={saving}
+              >
+                {currentStep === 2 && !trackingVerified
+                  ? 'Continuar mesmo assim'
+                  : 'Salvar e continuar'}
+              </Button>
             </div>
           )}
         </div>
-
-        {/* Actions */}
-        <div className="flex items-center justify-between">
-          <Button
-            variant="ghost"
-            onClick={prevStep}
-            disabled={currentStep === 1}
-            className="text-fg-on-dark-muted"
-          >
-            Voltar
-          </Button>
-          <Button onClick={nextStep} loading={saving}>
-            {isLast ? 'Ir para o Dashboard' : 'Proximo →'}
-          </Button>
-        </div>
-      </div>
-    </AppShell>
+      </main>
+    </div>
   )
 }

@@ -4,6 +4,7 @@
 
 import { getToken, clearToken } from './auth'
 
+
 // Em dev: API roda em localhost:3000. Em prod: same-origin (Easypanel routing).
 // Para usar VITE_API_BASE_URL, adicionar /// <reference types="vite/client" /> no projeto (Era 2).
 const WORKER_BASE =
@@ -231,4 +232,93 @@ export const analyticsApi = {
 export const healthApi = {
   check: () =>
     request<{ status: 'ok' }>('/api/health', { public: true }),
+}
+
+// --- Onboarding endpoints ---
+
+export type OnboardingState = {
+  tenant_id: string
+  slug: string
+  name: string
+  onboarding_step: number
+  onboarding_data: Record<string, unknown>
+  completed_at: string | null
+} | null
+
+export type Step1Body = {
+  name: string
+  slug: string
+  url?: string
+  logo_url?: string
+  brand_color: string
+}
+
+export type Step2Body = { tracking_verified: boolean }
+export type Step3Body = { sources: string[]; form_platform?: string }
+export type Step4Body = { platforms_configured: string[] }
+
+export const onboardingApi = {
+  getState: () =>
+    request<OnboardingState>('/api/onboarding/state'),
+
+  checkSlug: (slug: string) =>
+    request<{ available: boolean; reason?: string; suggestion?: string }>(
+      `/api/onboarding/check-slug?slug=${encodeURIComponent(slug)}`,
+    ),
+
+  checkTracking: () =>
+    request<{ received: boolean; event?: { source: string; type: string; received_at: string } }>(
+      '/api/onboarding/check-tracking',
+    ),
+
+  uploadLogo: async (file: File): Promise<{ url: string }> => {
+    const token = getToken()
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`${WORKER_BASE}/api/onboarding/upload-logo`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+    if (res.status === 401) {
+      clearToken()
+      window.location.href = '/login'
+      throw new Error('Unauthorized')
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`)
+    }
+    return res.json() as Promise<{ url: string }>
+  },
+
+  saveStep1: (body: Step1Body) =>
+    request<{ ok: true }>('/api/onboarding/step/1', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  saveStep2: (body: Step2Body) =>
+    request<{ ok: true }>('/api/onboarding/step/2', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  saveStep3: (body: Step3Body) =>
+    request<{ ok: true }>('/api/onboarding/step/3', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  saveStep4: (body: Step4Body) =>
+    request<{ ok: true }>('/api/onboarding/step/4', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  complete: () =>
+    request<{ tenant_id: string; completed_at: string }>('/api/onboarding/complete', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
 }

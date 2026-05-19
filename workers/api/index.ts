@@ -7,6 +7,7 @@ import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
 import authRouter from './auth'
 import analyticsRouter from './analytics'
+import onboardingRouter from './onboarding'
 import { authMiddleware, getJwtUser } from './middleware'
 import { queryOne } from './db'
 
@@ -46,6 +47,10 @@ app.route('/api/auth', authRouter)
 // --- Analytics (autenticado, multi-tenant via authMiddleware interno) ---
 
 app.route('/api/analytics', analyticsRouter)
+
+// --- Onboarding (autenticado — wizard 5 steps) ---
+
+app.route('/api/onboarding', onboardingRouter)
 
 // --- /api/me (autenticado) ---
 
