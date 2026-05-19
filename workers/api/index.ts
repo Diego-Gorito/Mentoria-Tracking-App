@@ -1,25 +1,17 @@
 // Mentoria Tracking API — Node.js via @hono/node-server
 // Migrado de Cloudflare Worker → Easypanel KV8 em 2026-05-18
-// Hono app idêntico; apenas adaptado o entrypoint pra Node.js.
-// TODO: implementar /api/auth/*, /api/tenants/*, /api/credentials/*, /api/query/*
+// Era 1: auth completo (signup/login/magic-link) + /api/me protegido.
 
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
+import authRouter from './auth'
+import { authMiddleware, getJwtUser } from './middleware'
+import { queryOne } from './db'
 
-type Bindings = {
-  ENVIRONMENT?: string
-  // Secrets via Easypanel Env tab (ADR-005):
-  // DATABASE_URL_OWNER — postgres connection string KV2
-  // JWT_SECRET         — 32+ chars random
-  // VAULT_KEY          — pgcrypto master key
-  // RESEND_API_KEY     — envio magic-link emails
-  // INTERNAL_API_KEY   — shared secret pra /api/internal/creds (n8n → API)
-}
+const app = new Hono()
 
-const app = new Hono<{ Bindings: Bindings }>()
-
-// CORS — permite same-origin em prod, localhost em dev
+// CORS — same-origin prod, localhost dev
 app.use(
   '*',
   cors({
@@ -36,108 +28,124 @@ app.use(
   }),
 )
 
-// --- Health ---
+// --- Health (público) ---
 
 app.get('/api/health', (c) => {
   return c.json({
     ok: true,
-    env: process.env.ENVIRONMENT || 'production',
+    env: process.env.NODE_ENV || 'production',
     ts: Date.now(),
   })
 })
 
-// --- Auth ---
+// --- Auth (público) ---
 
-app.post('/api/auth/signup', async (c) => {
-  // TODO: validar email/password, criar user no KV2, retornar JWT
-  return c.json({ error: 'Not implemented — Era 1 sprint 1' }, 501)
-})
+app.route('/api/auth', authRouter)
 
-app.post('/api/auth/login', async (c) => {
-  // TODO: verificar bcrypt hash, emitir JWT HS256 com claims { sub, email, tenantId, role }
-  return c.json({ error: 'Not implemented — Era 1 sprint 1' }, 501)
-})
+// --- /api/me (autenticado) ---
 
-app.post('/api/auth/magic-link', async (c) => {
-  // TODO: gerar token HMAC, salvar no KV2 com TTL 15min, enviar via Resend
-  return c.json({ error: 'Not implemented — Era 1 sprint 1' }, 501)
-})
+app.get('/api/me', authMiddleware, async (c) => {
+  const jwt = getJwtUser(c)
 
-app.get('/api/auth/magic-link/verify', async (c) => {
-  // TODO: verificar token da query string, emitir JWT, redirecionar pra dashboard
-  return c.json({ error: 'Not implemented — Era 1 sprint 1' }, 501)
+  const data = await queryOne<{
+    user_id: string
+    email: string
+    tenant_id: string
+    slug: string
+    name: string
+    onboarding_step: number
+    role: string
+  }>(
+    `SELECT u.user_id, u.email,
+            t.tenant_id, t.slug, t.name, t.onboarding_step,
+            tu.role
+     FROM core.users u
+     JOIN core.tenant_users tu ON tu.user_id = u.user_id
+     JOIN core.tenants t ON t.tenant_id = tu.tenant_id
+     WHERE u.user_id = $1::uuid
+     ORDER BY tu.accepted_at ASC
+     LIMIT 1`,
+    [jwt.sub],
+  )
+
+  if (!data) {
+    return c.json({ error: 'Usuario nao encontrado' }, 404)
+  }
+
+  return c.json(data)
 })
 
 // --- Tenants ---
 
 app.get('/api/tenants/resolve', async (c) => {
-  // TODO: SELECT * FROM core.tenants WHERE slug = extract_slug(host) OR custom_domain = host
-  const _host = c.req.query('host')
-  return c.json({ tenant: null })
+  const host = c.req.query('host')
+  if (!host) return c.json({ tenant: null })
+
+  const tenant = await queryOne(
+    `SELECT tenant_id, slug, name, plan, status, onboarding_step
+     FROM core.tenants
+     WHERE slug = $1 OR custom_domain = $1`,
+    [host],
+  )
+  return c.json({ tenant: tenant ?? null })
 })
 
-app.get('/api/tenants/me', async (c) => {
-  // TODO: ler tenant do JWT + buscar core.tenants
-  return c.json({ error: 'Not implemented — Era 1 sprint 1' }, 501)
+app.get('/api/tenants/me', authMiddleware, async (c) => {
+  const jwt = getJwtUser(c)
+
+  const tenant = await queryOne(
+    `SELECT t.tenant_id, t.slug, t.name, t.plan, t.status, t.onboarding_step, tu.role
+     FROM core.tenants t
+     JOIN core.tenant_users tu ON tu.tenant_id = t.tenant_id
+     WHERE tu.user_id = $1::uuid
+     ORDER BY tu.accepted_at ASC
+     LIMIT 1`,
+    [jwt.sub],
+  )
+  if (!tenant) return c.json({ error: 'Tenant nao encontrado' }, 404)
+  return c.json(tenant)
 })
 
-app.post('/api/tenants', async (c) => {
-  // TODO: criar tenant no KV2 + core.tenants
-  return c.json({ error: 'Not implemented — Era 1 sprint 1' }, 501)
-})
+// --- Credentials (stubs Era 1 sprint 2) ---
 
-app.put('/api/tenants/:tenantId', async (c) => {
-  // TODO: update tenant metadata
-  return c.json({ error: 'Not implemented — Era 1 sprint 2' }, 501)
-})
-
-// --- Credentials ---
-
-app.get('/api/credentials/:tenantId', async (c) => {
-  // TODO: SELECT provider_id, status, last_validated_at, extra_config
-  //       FROM core.tenant_credentials WHERE tenant_id = :tenantId
-  //       (NÃO retornar value_encrypted)
-  const _tenantId = c.req.param('tenantId')
+app.get('/api/credentials/:tenantId', authMiddleware, async (c) => {
   return c.json([])
 })
 
-app.post('/api/credentials/:tenantId', async (c) => {
-  // TODO: pgp_sym_encrypt(value, vault_key) + upsert core.tenant_credentials
-  return c.json({ error: 'Not implemented — Era 1 sprint 2' }, 501)
+app.post('/api/credentials/:tenantId', authMiddleware, async (c) => {
+  return c.json({ error: 'Nao implementado — Era 1 sprint 2' }, 501)
 })
 
-// --- Test connection ---
+// --- Test connection (stub) ---
 
-app.post('/api/test/:platform', async (c) => {
-  // TODO: pra cada plataforma, chamar API externa pra validar credencial
+app.post('/api/test/:platform', authMiddleware, async (c) => {
   const platform = c.req.param('platform')
-  return c.json({ error: `Test not implemented for platform "${platform}" — Era 1 sprint 2` }, 501)
+  return c.json({ error: `Teste nao implementado para "${platform}" — Era 1 sprint 2` }, 501)
 })
 
-// --- Query whitelist runner ---
+// --- Query whitelist (stub) ---
 
-app.post('/api/query/:name', async (c) => {
-  // TODO: whitelist de queries permitidas (kpi_summary, funnel_daily, roas_by_platform, etc.)
-  //       SET LOCAL app.current_school_id = tenantId antes de executar
+app.post('/api/query/:name', authMiddleware, async (c) => {
   const name = c.req.param('name')
-  const _tenantId = c.req.query('tenantId')
-  return c.json({ error: `Query "${name}" not implemented — Era 1 sprint 3` }, 501)
+  return c.json({ error: `Query "${name}" nao implementada — Era 1 sprint 3` }, 501)
 })
 
-// --- Internal (n8n → API) ---
+// --- Internal n8n (stub) ---
 
 app.get('/api/internal/creds', async (c) => {
-  // TODO: rota interna pra n8n buscar credenciais decriptadas
-  //       Requer shared secret em header X-Internal-Key
-  return c.json({ error: 'Not implemented — Era 1 sprint 2' }, 501)
+  const key = c.req.header('X-Internal-Key')
+  if (!key || key !== process.env.INTERNAL_API_KEY) {
+    return c.json({ error: 'Acesso nao autorizado' }, 401)
+  }
+  return c.json({ error: 'Nao implementado — Era 1 sprint 2' }, 501)
 })
 
 // 404 fallback
 app.notFound((c) => {
-  return c.json({ error: `Route not found: ${c.req.method} ${c.req.path}` }, 404)
+  return c.json({ error: `Rota nao encontrada: ${c.req.method} ${c.req.path}` }, 404)
 })
 
-// Entrypoint Node.js (substituiu export default app do CF Worker)
+// Entrypoint Node.js
 const port = parseInt(process.env.PORT || '3000')
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`tracking-api listening on http://localhost:${info.port}`)

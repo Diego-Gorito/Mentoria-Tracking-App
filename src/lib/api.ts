@@ -1,13 +1,14 @@
-// api.ts — cliente fetch para o Cloudflare Worker /api/*
+// api.ts — cliente fetch para o Hono Node.js API /api/*
 // Injeta Bearer JWT em todas as requests autenticadas.
 // TODO: adicionar retry com exponential backoff (Era 2).
 
 import { getToken, clearToken } from './auth'
 
-// Em dev: Worker roda em localhost:8787. Em prod: same-origin via CF Pages + Worker route.
+// Em dev: API roda em localhost:3000. Em prod: same-origin (Easypanel routing).
+// Para usar VITE_API_BASE_URL, adicionar /// <reference types="vite/client" /> no projeto (Era 2).
 const WORKER_BASE =
   typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:8787'
+    ? 'http://localhost:3000'
     : ''
 
 type FetchOptions = Omit<RequestInit, 'headers'> & {
@@ -49,18 +50,39 @@ async function request<T>(path: string, opts: FetchOptions = {}): Promise<T> {
   return res.json() as Promise<T>
 }
 
+// Tipo de resposta auth (signup e login retornam mesma shape)
+export type AuthResponse = {
+  user_id: string
+  email: string
+  tenant_slug: string | null
+  tenant_name: string | null
+  role: string | null
+  onboarding_step: number
+  token: string
+}
+
+export type MeResponse = {
+  user_id: string
+  email: string
+  tenant_id: string
+  slug: string
+  name: string
+  onboarding_step: number
+  role: string
+}
+
 // --- Auth endpoints ---
 
 export const authApi = {
-  signup: (email: string, password: string) =>
-    request<{ token: string; user: unknown }>('/api/auth/signup', {
+  signup: (body: { email: string; password: string; name: string; tenant_slug?: string }) =>
+    request<AuthResponse>('/api/auth/signup', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(body),
       public: true,
     }),
 
   login: (email: string, password: string) =>
-    request<{ token: string; user: unknown }>('/api/auth/login', {
+    request<AuthResponse>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
       public: true,
@@ -72,6 +94,8 @@ export const authApi = {
       body: JSON.stringify({ email }),
       public: true,
     }),
+
+  me: () => request<MeResponse>('/api/me'),
 }
 
 // --- Tenant endpoints ---

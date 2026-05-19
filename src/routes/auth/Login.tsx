@@ -8,6 +8,8 @@ import { Logo } from '@/components/ui/Logo'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
+import { authApi } from '@/lib/api'
+import { setToken, setUser } from '@/lib/auth'
 
 type Props = {
   onLogin?: () => void
@@ -49,34 +51,28 @@ export function Login({ onLogin, onGoSignup, onGoMagicLink }: Props) {
 
     setLoading(true)
     try {
-      // Mock: "wrong@test.com" simula 401
-      if (email === 'wrong@test.com') {
-        await new Promise((r) => setTimeout(r, 600))
-        setServerError('E-mail ou senha incorretos.')
-        return
-      }
+      const res = await authApi.login(email, senha)
 
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: senha, remember: lembrar }),
+      setToken(res.token)
+      setUser({
+        id: res.user_id,
+        email: res.email,
+        tenantId: res.tenant_slug ?? '',
+        tenantSlug: res.tenant_slug ?? '',
+        tenantName: res.tenant_name ?? '',
+        role: (res.role as 'owner' | 'admin' | 'viewer') ?? 'owner',
       })
-      if (res.ok) {
-        toast('Bem-vindo de volta!', 'success')
-        onLogin?.()
-        return
-      }
-      if (res.status === 401) {
-        setServerError('E-mail ou senha incorretos.')
-        return
-      }
-      // Worker nao rodando (404/network) — simula sucesso em dev
-      throw new Error('dev-fallback')
-    } catch {
-      // Fallback dev: simula login bem-sucedido
+
       toast('Bem-vindo de volta!', 'success')
-      await new Promise((r) => setTimeout(r, 400))
+      await new Promise((r) => setTimeout(r, 300))
       onLogin?.()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao fazer login'
+      if (msg.includes('incorretos') || msg.includes('401') || msg.includes('Unauthorized')) {
+        setServerError('E-mail ou senha incorretos.')
+      } else {
+        setServerError(msg)
+      }
     } finally {
       setLoading(false)
     }

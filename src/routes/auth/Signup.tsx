@@ -8,6 +8,8 @@ import { Logo } from '@/components/ui/Logo'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
+import { authApi } from '@/lib/api'
+import { setToken, setUser } from '@/lib/auth'
 
 type Props = {
   onSignup?: () => void
@@ -98,30 +100,35 @@ export function Signup({ onSignup, onGoLogin }: Props) {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: nome.trim(), email, company: empresa.trim(), slug, password: senha }),
+      const res = await authApi.signup({
+        email,
+        password: senha,
+        name: nome.trim(),
+        tenant_slug: slug || undefined,
       })
-      if (!res.ok && res.status !== 404) {
-        // Worker ainda nao existe — tratar 404 como sucesso do mock
-        throw new Error(`Erro ${res.status}`)
-      }
-      // Mock sucesso: salva no localStorage pra Wizard pegar
+
+      // Persiste JWT + user info
+      setToken(res.token)
+      setUser({
+        id: res.user_id,
+        email: res.email,
+        tenantId: res.tenant_slug ?? '',
+        tenantSlug: res.tenant_slug ?? '',
+        tenantName: res.tenant_name ?? '',
+        role: (res.role as 'owner' | 'admin' | 'viewer') ?? 'owner',
+      })
+
+      // Mantém dados pra Wizard
       localStorage.setItem('mentoria-tracking.signup-name', nome.trim())
       localStorage.setItem('mentoria-tracking.signup-company', empresa.trim())
-      localStorage.setItem('mentoria-tracking.signup-slug', slug)
-      toast('Conta criada! Verifique seu e-mail para confirmar.', 'success', 5000)
-      await new Promise((r) => setTimeout(r, 800))
+      localStorage.setItem('mentoria-tracking.signup-slug', res.tenant_slug ?? slug)
+
+      toast('Conta criada com sucesso!', 'success', 5000)
+      await new Promise((r) => setTimeout(r, 300))
       onSignup?.()
-    } catch {
-      // Em dev (sem Worker rodando) simula sucesso
-      localStorage.setItem('mentoria-tracking.signup-name', nome.trim())
-      localStorage.setItem('mentoria-tracking.signup-company', empresa.trim())
-      localStorage.setItem('mentoria-tracking.signup-slug', slug)
-      toast('Conta criada! Verifique seu e-mail para confirmar.', 'success', 5000)
-      await new Promise((r) => setTimeout(r, 400))
-      onSignup?.()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao criar conta'
+      toast(msg, 'error', 5000)
     } finally {
       setLoading(false)
     }
