@@ -180,7 +180,8 @@ onboardingRouter.post('/complete', async (c) => {
 
     // Buscar completed_at atual
     const { data: tenantData } = await supabaseAdmin
-      .from('core.tenants')
+      .schema('core')
+      .from('tenants')
       .select('onboarding_completed_at')
       .eq('tenant_id', result.tenant_id)
       .limit(1)

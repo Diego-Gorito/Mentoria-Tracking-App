@@ -23,7 +23,8 @@ export async function resolveSchoolId(tenantId: string): Promise<string | null> 
   // Nota: schema real e tracking.schools (Supabase) ou core.schools (KV2 legado).
   // Usando core.schools por ora (mesma tabela portada nas migrations 0200+).
   const { data, error } = await supabaseAdmin
-    .from('core.schools')
+    .schema('core')
+    .from('schools')
     .select('school_id')
     .eq('tenant_id', tenantId)
     .limit(1)
@@ -91,21 +92,24 @@ analyticsRouter.get('/summary', async (c) => {
   const leadsDeltaPct = leadsPrev > 0 ? ((leadsTotal - leadsPrev) / leadsPrev) * 100 : 0
 
   type ConvRow = { conv_total: number; value_sum: number }
-  const { data: convRow } = await supabaseAdmin.rpc('analytics_conversions_summary', {
+  const convResult = await supabaseAdmin.rpc('analytics_conversions_summary', {
     p_school_id: schoolId,
     p_interval: interval,
-  }).catch(() => ({ data: null }))
+  }).then((r) => ({ data: r.data }), () => ({ data: null }))
+  const convRow = convResult.data
 
   const convTotal = (convRow as ConvRow | null)?.conv_total ?? 0
   const valueCents = (convRow as ConvRow | null)?.value_sum ?? 0
   const valueBrl = valueCents / 100
 
   // Spend via analytics.roi_por_campanha
-  const { data: spendData } = await supabaseAdmin
-    .from('analytics.roi_por_campanha')
+  const spendResult = await supabaseAdmin
+    .schema('analytics')
+    .from('roi_por_campanha')
     .select('cost_brl')
     .eq('school_id', schoolId)
-    .catch(() => ({ data: null }))
+    .then((r) => ({ data: r.data }), () => ({ data: null }))
+  const spendData = spendResult.data
 
   const spendBrl = spendData
     ? (spendData as { cost_brl: number | null }[]).reduce((s, r) => s + (r.cost_brl ?? 0), 0)
@@ -116,9 +120,10 @@ analyticsRouter.get('/summary', async (c) => {
 
   // Dispatch health (últimas 24h)
   type DispRow = { total: number; sent: number }
-  const { data: dispRow } = await supabaseAdmin.rpc('analytics_dispatch_health', {
+  const dispResult = await supabaseAdmin.rpc('analytics_dispatch_health', {
     p_school_id: schoolId,
-  }).catch(() => ({ data: null }))
+  }).then((r) => ({ data: r.data }), () => ({ data: null }))
+  const dispRow = dispResult.data
 
   const dispTotal = (dispRow as DispRow | null)?.total ?? 0
   const dispSent = (dispRow as DispRow | null)?.sent ?? 0
@@ -154,7 +159,8 @@ analyticsRouter.get('/funnel', async (c) => {
   }
 
   const { data: rows, error } = await supabaseAdmin
-    .from('analytics.funil_diario')
+    .schema('analytics')
+    .from('funil_diario')
     .select('day,sessions,new_leads,qualified_today,app_purchases,escola_matriculas')
     .eq('school_id', schoolId)
     .gte('day', sinceDate)
@@ -190,7 +196,8 @@ analyticsRouter.get('/roi-platforms', async (c) => {
   }
 
   const { data: rows, error } = await supabaseAdmin
-    .from('analytics.roi_por_campanha')
+    .schema('analytics')
+    .from('roi_por_campanha')
     .select('platform,utm_source,cost_brl,total_conversions,revenue_brl')
     .eq('school_id', schoolId)
 
@@ -243,7 +250,8 @@ analyticsRouter.get('/leads-recent', async (c) => {
   }
 
   const { data: rows, error } = await supabaseAdmin
-    .from('analytics.leads_quentes_safe_mv')
+    .schema('analytics')
+    .from('leads_quentes_safe_mv')
     .select('lead_id,email_masked,phone_masked,full_name_masked,current_score,first_source,last_event_at,score_tier')
     .eq('school_id', schoolId)
     .order('last_event_at', { ascending: false, nullsFirst: false })
@@ -323,7 +331,8 @@ analyticsRouter.get('/channels', async (c) => {
   }
 
   const { data: rows, error } = await supabaseAdmin
-    .from('core.leads')
+    .schema('core')
+    .from('leads')
     .select('first_seen_at,first_source')
     .eq('school_id', schoolId)
     .gte('first_seen_at', sinceTs)

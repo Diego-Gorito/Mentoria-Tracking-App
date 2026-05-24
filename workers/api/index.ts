@@ -60,10 +60,11 @@ app.get('/api/me', authMiddleware, async (c) => {
 
   // Buscar dados do tenant via Supabase
   const { data, error } = await supabaseAdmin
-    .from('core.tenant_users')
+    .schema('core')
+    .from('tenant_users')
     .select(`
       role,
-      core.tenants!inner(tenant_id, slug, name, onboarding_step)
+      tenants!inner(tenant_id, slug, name, onboarding_step)
     `)
     .eq('user_id', ctx.userId)
     .order('accepted_at', { ascending: true })
@@ -81,7 +82,9 @@ app.get('/api/me', authMiddleware, async (c) => {
     })
   }
 
-  const tenant = (data as { role: string; 'core.tenants': { tenant_id: string; slug: string; name: string; onboarding_step: number } })['core.tenants']
+  // Supabase JS retorna tenants como array (nested select), mesmo com !inner — pega [0]
+  const tenantsArr = (data as unknown as { role: string; tenants: { tenant_id: string; slug: string; name: string; onboarding_step: number }[] }).tenants
+  const tenant = Array.isArray(tenantsArr) ? tenantsArr[0] : tenantsArr
 
   return c.json({
     user_id: ctx.userId,
@@ -103,7 +106,8 @@ app.get('/api/tenants/resolve', async (c) => {
   if (!host) return c.json({ tenant: null })
 
   const { data: tenant } = await supabaseAdmin
-    .from('core.tenants')
+    .schema('core')
+    .from('tenants')
     .select('tenant_id,slug,name,plan,status,onboarding_step')
     .or(`slug.eq.${host},custom_domain.eq.${host}`)
     .limit(1)
@@ -116,13 +120,14 @@ app.get('/api/tenants/me', authMiddleware, async (c) => {
   const ctx = getAuthCtx(c)
 
   const { data: tenant } = await supabaseAdmin
-    .from('core.tenants')
+    .schema('core')
+    .from('tenants')
     .select(`
       tenant_id, slug, name, plan, status, onboarding_step,
-      core.tenant_users!inner(role)
+      tenant_users!inner(role)
     `)
-    .eq('core.tenant_users.user_id', ctx.userId)
-    .order('core.tenant_users.accepted_at', { ascending: true })
+    .eq('tenant_users.user_id', ctx.userId)
+    .order('tenant_users.accepted_at', { ascending: true })
     .limit(1)
     .single()
 
