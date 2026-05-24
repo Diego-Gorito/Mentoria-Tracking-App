@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
 import { authApi } from '@/lib/api'
-import { setToken, setUser } from '@/lib/auth'
+import { setSession } from '@/lib/auth'
 
 type Props = {
   onLogin?: () => void
@@ -53,14 +53,10 @@ export function Login({ onLogin, onGoSignup, onGoMagicLink }: Props) {
     try {
       const res = await authApi.login(email, senha)
 
-      setToken(res.token)
-      setUser({
-        id: res.user_id,
-        email: res.email,
-        tenantId: res.tenant_slug ?? '',
-        tenantSlug: res.tenant_slug ?? '',
-        tenantName: res.tenant_name ?? '',
-        role: (res.role as 'owner' | 'admin' | 'viewer') ?? 'owner',
+      setSession({
+        access_token: res.access_token,
+        refresh_token: res.refresh_token,
+        expires_at: Math.floor(Date.now() / 1000) + res.expires_in,
       })
 
       toast('Bem-vindo de volta!', 'success')

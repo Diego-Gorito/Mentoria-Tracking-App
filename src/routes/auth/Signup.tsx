@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
 import { authApi } from '@/lib/api'
-import { setToken, setUser } from '@/lib/auth'
+import { setSession } from '@/lib/auth'
 
 type Props = {
   onSignup?: () => void
@@ -100,23 +100,22 @@ export function Signup({ onSignup, onGoLogin }: Props) {
 
     setLoading(true)
     try {
-      const res = await authApi.signup({
+      const signupRes = await authApi.signup({
         email,
         password: senha,
         name: nome.trim(),
         tenant_slug: slug || undefined,
       })
 
-      // Persiste JWT + user info
-      setToken(res.token)
-      setUser({
-        id: res.user_id,
-        email: res.email,
-        tenantId: res.tenant_slug ?? '',
-        tenantSlug: res.tenant_slug ?? '',
-        tenantName: res.tenant_name ?? '',
-        role: (res.role as 'owner' | 'admin' | 'viewer') ?? 'owner',
+      // Signup retorna apenas user_id/email. Faz auto-login para obter session.
+      const loginRes = await authApi.login(email, senha)
+      setSession({
+        access_token: loginRes.access_token,
+        refresh_token: loginRes.refresh_token,
+        expires_at: Math.floor(Date.now() / 1000) + loginRes.expires_in,
       })
+
+      const res = signupRes
 
       // Mantém dados pra Wizard
       localStorage.setItem('mentoria-tracking.signup-name', nome.trim())
