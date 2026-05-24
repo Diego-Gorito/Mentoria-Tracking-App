@@ -50,7 +50,7 @@ enable_confirmations = false
 [auth.hook.custom_access_token]
 enabled = true
 uri = "https://cjtwrzlwfqvzukjinmjr.supabase.co/functions/v1/custom-access-token"
-secrets = ""
+secrets = "env(AUTH_HOOK_WEBHOOK_SECRET)"
 
 [edge_runtime]
 enabled = true
