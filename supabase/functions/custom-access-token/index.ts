@@ -46,7 +46,8 @@ export default async function handler(event: HookEvent) {
 
   // 1. Resolver tenant ativo do usuario (primeiro tenant por accepted_at ASC)
   const { data: tenantData, error: tenantErr } = await supabase
-    .from('core.tenant_users')
+    .schema('core')
+    .from('tenant_users')
     .select('tenant_id')
     .eq('user_id', user_id)
     .order('accepted_at', { ascending: true })
@@ -75,7 +76,8 @@ export default async function handler(event: HookEvent) {
   // Usando core.tenant_users.role como proxy (Era 1 sem tabela dedicada user_products)
   // Era 2: criar core.user_products(user_id, tenant_id, product) para granularidade por produto.
   const { data: productsData } = await supabase
-    .from('core.tenant_users')
+    .schema('core')
+    .from('tenant_users')
     .select('role')
     .eq('user_id', user_id)
     .eq('tenant_id', tenantId)
