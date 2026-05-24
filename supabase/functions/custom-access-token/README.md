@@ -94,3 +94,45 @@ Resposta esperada (usuário sem tenant — recém-criado):
 
 O cliente Supabase JS usa `.schema('core').from('tenant_users')` — nunca `from('core.tenant_users')`.
 Isso garante que o PostgREST envie o header `Accept-Profile: core` corretamente.
+
+## Ativar Auth Hook no Dashboard
+
+Após deploy, ativar manualmente:
+
+1. Dashboard: https://supabase.com/dashboard/project/cjtwrzlwfqvzukjinmjr/auth/hooks
+2. Seção **Custom Access Token** → Enable
+3. Type: **HTTP Request**
+4. URL: `https://cjtwrzlwfqvzukjinmjr.supabase.co/functions/v1/custom-access-token`
+5. Clicar **Save**
+
+> O `config.toml` já tem `[auth.hook.custom_access_token]` configurado — mas o Dashboard override tem precedência
+> em branches Supabase. Confirmar via Dashboard após deploy.
+
+## Cold start em Branch Supabase (nota operacional)
+
+Branches Supabase têm Edge Runtime em modo idle. A **primeira** invocação após deploy ou período de inatividade
+pode resultar em `IDLE_TIMEOUT` (150s) ou `504`. Isso é esperado — não indica bug na função.
+
+**Workaround para smoke test:**
+1. Invocar 2-3 vezes até warm up (geralmente resolve em <5 min após deploy)
+2. OU fazer deploy e testar no dia seguinte (branch acorda com a primeira requisição real)
+3. Para testes contínuos: usar `supabase functions serve` localmente com `--no-verify-jwt`
+
+**Verificar que está deployada (mesmo sem smoke OK):**
+```bash
+# Checar no Dashboard
+# https://supabase.com/dashboard/project/cjtwrzlwfqvzukjinmjr/functions
+# A função custom-access-token deve aparecer com status Active
+```
+
+## Config.toml fix (v2.75 CLI)
+
+O CLI v2.75 exige o campo `secrets` no `[auth.hook.custom_access_token]`. Manter como `secrets = ""` no
+`config.toml` local para compatibilidade. O campo não afeta o deploy remoto.
+
+Deploy via workdir temporário (sem auth.hook no config) é o método correto para v2.75:
+```bash
+# Usar /tmp/supabase-deploy-temp/ (config mínimo sem hook section)
+cd /tmp/supabase-deploy-temp && supabase functions deploy custom-access-token \
+  --project-ref cjtwrzlwfqvzukjinmjr --use-api
+```

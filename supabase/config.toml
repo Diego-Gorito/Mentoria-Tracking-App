@@ -50,10 +50,10 @@ enable_confirmations = false
 [auth.hook.custom_access_token]
 enabled = true
 uri = "https://cjtwrzlwfqvzukjinmjr.supabase.co/functions/v1/custom-access-token"
+secrets = ""
 
 [edge_runtime]
 enabled = true
-ip_version = "ipv4"
 
 [analytics]
 enabled = false
