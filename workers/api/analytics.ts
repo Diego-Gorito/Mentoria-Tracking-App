@@ -19,9 +19,9 @@ export async function resolveSchoolId(tenantId: string): Promise<string | null> 
   const cached = schoolIdCache.get(tenantId)
   if (cached && cached.exp > Date.now()) return cached.schoolId
 
-  // Supabase schema tracking.* — tabela core.tenants mapeia tenant_id → schools
-  // Nota: schema real e tracking.schools (Supabase) ou core.schools (KV2 legado).
-  // Usando core.schools por ora (mesma tabela portada nas migrations 0200+).
+  // core.schools — tabela portada nas migrations 0200+ (ADR-0084 Appendix C).
+  // OLD: tracking.schools (Supabase) ou core.schools (KV2) — mismatch resolvido.
+  // NEW: core.schools (Supabase derived view from core.tenants) — see ADR-0084 Appendix C.
   const { data, error } = await supabaseAdmin
     .schema('core')
     .from('schools')

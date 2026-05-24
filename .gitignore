@@ -40,3 +40,13 @@ lerna-debug.log*
 # Playwright
 test-results/
 playwright-report/
+
+# Aider AI assistant (local chat history — NUNCA commitar)
+.aider.*
+.aider*
+
+# Supabase CLI temp (local profile/cache)
+supabase/.temp/
+
+# Wrangler / Cloudflare auto-generated types (regenerate locally with `wrangler types`)
+worker-configuration.d.ts

@@ -64,7 +64,7 @@ app.get('/api/me', authMiddleware, async (c) => {
     .from('tenant_users')
     .select(`
       role,
-      tenants!inner(tenant_id, slug, name, onboarding_step)
+      tenants!inner(id, slug, name, onboarding_step)
     `)
     .eq('user_id', ctx.userId)
     .order('accepted_at', { ascending: true })
@@ -83,13 +83,14 @@ app.get('/api/me', authMiddleware, async (c) => {
   }
 
   // Supabase JS retorna tenants como array (nested select), mesmo com !inner — pega [0]
-  const tenantsArr = (data as unknown as { role: string; tenants: { tenant_id: string; slug: string; name: string; onboarding_step: number }[] }).tenants
+  // col real: id (PK de core.tenants) — alias pra tenant_id no response pra manter shape SPA
+  const tenantsArr = (data as unknown as { role: string; tenants: { id: string; slug: string; name: string; onboarding_step: number }[] }).tenants
   const tenant = Array.isArray(tenantsArr) ? tenantsArr[0] : tenantsArr
 
   return c.json({
     user_id: ctx.userId,
     email: ctx.email,
-    tenant_id: tenant?.tenant_id ?? ctx.tenantId,
+    tenant_id: tenant?.id ?? ctx.tenantId,
     slug: tenant?.slug,
     name: tenant?.name,
     onboarding_step: tenant?.onboarding_step,
@@ -105,25 +106,31 @@ app.get('/api/tenants/resolve', async (c) => {
   const host = c.req.query('host')
   if (!host) return c.json({ tenant: null })
 
-  const { data: tenant } = await supabaseAdmin
+  // col real: id (PK de core.tenants) — alias pra tenant_id no response pra manter shape SPA
+  const { data: tenantRaw } = await supabaseAdmin
     .schema('core')
     .from('tenants')
-    .select('tenant_id,slug,name,plan,status,onboarding_step')
+    .select('id,slug,name,plan,status,onboarding_step')
     .or(`slug.eq.${host},custom_domain.eq.${host}`)
     .limit(1)
     .single()
 
-  return c.json({ tenant: tenant ?? null })
+  const tenant = tenantRaw
+    ? { ...tenantRaw, tenant_id: tenantRaw.id, id: undefined }
+    : null
+
+  return c.json({ tenant })
 })
 
 app.get('/api/tenants/me', authMiddleware, async (c) => {
   const ctx = getAuthCtx(c)
 
-  const { data: tenant } = await supabaseAdmin
+  // col real: id (PK de core.tenants) — alias pra tenant_id no response pra manter shape SPA
+  const { data: tenantRaw } = await supabaseAdmin
     .schema('core')
     .from('tenants')
     .select(`
-      tenant_id, slug, name, plan, status, onboarding_step,
+      id, slug, name, plan, status, onboarding_step,
       tenant_users!inner(role)
     `)
     .eq('tenant_users.user_id', ctx.userId)
@@ -131,8 +138,10 @@ app.get('/api/tenants/me', authMiddleware, async (c) => {
     .limit(1)
     .single()
 
-  if (!tenant) return c.json({ error: 'Tenant nao encontrado' }, 404)
-  return c.json(tenant)
+  if (!tenantRaw) return c.json({ error: 'Tenant nao encontrado' }, 404)
+
+  const { id, ...rest } = tenantRaw as typeof tenantRaw & { id: string }
+  return c.json({ ...rest, tenant_id: id })
 })
 
 // --- Credentials (stubs Era 1 sprint 2) ---
