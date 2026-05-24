@@ -1,6 +1,7 @@
 // Mentoria Tracking API — Node.js via @hono/node-server
-// Migrado de Cloudflare Worker → Easypanel KV8 em 2026-05-18
-// Era 1: auth completo (signup/login/magic-link) + /api/me protegido.
+// Fase 3 — ADR-0007 v1.2 (Supabase rebase — auth + db migrados)
+// Runtime: tsx (TypeScript direto, sem compilacao)
+// Deploy: Easypanel KV8 tracking-api (REGRA #-2 Cloudflare-Last)
 
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -8,8 +9,8 @@ import { serve } from '@hono/node-server'
 import authRouter from './auth'
 import analyticsRouter from './analytics'
 import onboardingRouter from './onboarding'
-import { authMiddleware, getJwtUser } from './middleware'
-import { queryOne } from './db'
+import { authMiddleware, getAuthCtx } from './middleware'
+import { supabaseAdmin } from './db'
 
 const app = new Hono()
 
@@ -24,7 +25,7 @@ app.use(
       if (origin.includes('escola.click')) return origin
       return null
     },
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   }),
@@ -55,34 +56,44 @@ app.route('/api/onboarding', onboardingRouter)
 // --- /api/me (autenticado) ---
 
 app.get('/api/me', authMiddleware, async (c) => {
-  const jwt = getJwtUser(c)
+  const ctx = getAuthCtx(c)
 
-  const data = await queryOne<{
-    user_id: string
-    email: string
-    tenant_id: string
-    slug: string
-    name: string
-    onboarding_step: number
-    role: string
-  }>(
-    `SELECT u.user_id, u.email,
-            t.tenant_id, t.slug, t.name, t.onboarding_step,
-            tu.role
-     FROM core.users u
-     JOIN core.tenant_users tu ON tu.user_id = u.user_id
-     JOIN core.tenants t ON t.tenant_id = tu.tenant_id
-     WHERE u.user_id = $1::uuid
-     ORDER BY tu.accepted_at ASC
-     LIMIT 1`,
-    [jwt.sub],
-  )
+  // Buscar dados do tenant via Supabase
+  const { data, error } = await supabaseAdmin
+    .from('core.tenant_users')
+    .select(`
+      role,
+      core.tenants!inner(tenant_id, slug, name, onboarding_step)
+    `)
+    .eq('user_id', ctx.userId)
+    .order('accepted_at', { ascending: true })
+    .limit(1)
+    .single()
 
-  if (!data) {
-    return c.json({ error: 'Usuario nao encontrado' }, 404)
+  if (error || !data) {
+    // Retorna dados basicos do JWT mesmo sem tenant (user recem criado)
+    return c.json({
+      user_id: ctx.userId,
+      email: ctx.email,
+      tenant_id: ctx.tenantId,
+      products: ctx.products,
+      current_product: ctx.currentProduct,
+    })
   }
 
-  return c.json(data)
+  const tenant = (data as { role: string; 'core.tenants': { tenant_id: string; slug: string; name: string; onboarding_step: number } })['core.tenants']
+
+  return c.json({
+    user_id: ctx.userId,
+    email: ctx.email,
+    tenant_id: tenant?.tenant_id ?? ctx.tenantId,
+    slug: tenant?.slug,
+    name: tenant?.name,
+    onboarding_step: tenant?.onboarding_step,
+    role: (data as { role: string }).role,
+    products: ctx.products,
+    current_product: ctx.currentProduct,
+  })
 })
 
 // --- Tenants ---
@@ -91,35 +102,38 @@ app.get('/api/tenants/resolve', async (c) => {
   const host = c.req.query('host')
   if (!host) return c.json({ tenant: null })
 
-  const tenant = await queryOne(
-    `SELECT tenant_id, slug, name, plan, status, onboarding_step
-     FROM core.tenants
-     WHERE slug = $1 OR custom_domain = $1`,
-    [host],
-  )
+  const { data: tenant } = await supabaseAdmin
+    .from('core.tenants')
+    .select('tenant_id,slug,name,plan,status,onboarding_step')
+    .or(`slug.eq.${host},custom_domain.eq.${host}`)
+    .limit(1)
+    .single()
+
   return c.json({ tenant: tenant ?? null })
 })
 
 app.get('/api/tenants/me', authMiddleware, async (c) => {
-  const jwt = getJwtUser(c)
+  const ctx = getAuthCtx(c)
 
-  const tenant = await queryOne(
-    `SELECT t.tenant_id, t.slug, t.name, t.plan, t.status, t.onboarding_step, tu.role
-     FROM core.tenants t
-     JOIN core.tenant_users tu ON tu.tenant_id = t.tenant_id
-     WHERE tu.user_id = $1::uuid
-     ORDER BY tu.accepted_at ASC
-     LIMIT 1`,
-    [jwt.sub],
-  )
+  const { data: tenant } = await supabaseAdmin
+    .from('core.tenants')
+    .select(`
+      tenant_id, slug, name, plan, status, onboarding_step,
+      core.tenant_users!inner(role)
+    `)
+    .eq('core.tenant_users.user_id', ctx.userId)
+    .order('core.tenant_users.accepted_at', { ascending: true })
+    .limit(1)
+    .single()
+
   if (!tenant) return c.json({ error: 'Tenant nao encontrado' }, 404)
   return c.json(tenant)
 })
 
 // --- Credentials (stubs Era 1 sprint 2) ---
 
-app.get('/api/credentials/:tenantId', authMiddleware, async (c) => {
-  return c.json([])
+app.get('/api/credentials/:tenantId', authMiddleware, async (_c) => {
+  return _c.json([])
 })
 
 app.post('/api/credentials/:tenantId', authMiddleware, async (c) => {

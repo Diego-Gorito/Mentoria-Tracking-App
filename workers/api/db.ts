@@ -1,52 +1,82 @@
-// db.ts — Postgres connection pool (pg)
-// Era 1: pool simples, max 5 conexoes, sem ORM.
-// Usa DATABASE_URL via env var (setado no Easypanel tracking-api).
+// db.ts — Supabase JS client wrapper
+// Supabase rebase (Fase 3 — ADR-0007 v1.2)
+// Substitui pool pg KV2 por @supabase/supabase-js.
+//
+// Dois clientes:
+//   supabaseAdmin — service_role (bypassa RLS — usar em operacoes internas)
+//   supabaseAnon  — anon key (respeita RLS — usar com JWT do usuario)
+//
+// LGPD: sem dados sensíveis em logs.
 
-import pg from 'pg'
+import { createClient } from '@supabase/supabase-js'
 
-const { Pool } = pg
+const SUPABASE_URL = process.env.SUPABASE_URL
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 5,
-  idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: 5_000,
+if (!SUPABASE_URL) throw new Error('[db] SUPABASE_URL env var não configurado')
+if (!SUPABASE_ANON_KEY) throw new Error('[db] SUPABASE_ANON_KEY env var não configurado')
+if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error('[db] SUPABASE_SERVICE_ROLE_KEY env var não configurado')
+
+// Admin client — bypassa RLS (service_role). Usar apenas para operacoes
+// que precisam de acesso irrestrito (ex: criar tenant, provisionar credenciais).
+export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
 })
 
-pool.on('error', (err) => {
-  // LGPD: sem dados sensíveis no log
-  console.error('[db] pool error:', err.message)
+// Anon client — base pra criar clientes com JWT do usuario.
+// Nao usar diretamente — usar createUserClient(jwt) ou supabaseAdmin.
+export const supabaseAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
 })
 
-export async function query<T = Record<string, unknown>>(
-  sql: string,
-  params: unknown[] = [],
-): Promise<T[]> {
-  const result = await pool.query(sql, params)
-  return result.rows as T[]
+// Criar cliente com JWT do usuario para respeitar RLS (multi-tenant isolation).
+// O JWT emitido pelo Supabase Auth ja carrega tenant_id + products via Custom
+// Access Token Hook (ADR-0085).
+export function createUserClient(accessToken: string) {
+  return createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  })
 }
 
-export async function queryOne<T = Record<string, unknown>>(
-  sql: string,
-  params: unknown[] = [],
+// Helper: executar RPC com admin client (sem RLS).
+export async function rpcAdmin<T = unknown>(
+  fn: string,
+  args: Record<string, unknown> = {},
 ): Promise<T | null> {
-  const rows = await query<T>(sql, params)
-  return rows[0] ?? null
+  const { data, error } = await supabaseAdmin.rpc(fn, args)
+  if (error) throw new Error(`[db] rpc ${fn} error: ${error.message}`)
+  return (data as T) ?? null
 }
 
-export async function queryTx<T>(
-  fn: (client: pg.PoolClient) => Promise<T>,
-): Promise<T> {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-    const result = await fn(client)
-    await client.query('COMMIT')
-    return result
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
+// Helper: buscar primeira linha de tabela/view com admin client.
+export async function selectOneAdmin<T = Record<string, unknown>>(
+  table: string,
+  match: Record<string, unknown>,
+): Promise<T | null> {
+  const query = supabaseAdmin.from(table).select()
+  const entries = Object.entries(match)
+  let q = query
+  for (const [col, val] of entries) {
+    q = q.eq(col, val as string)
   }
+  const { data, error } = await q.limit(1).single()
+  if (error && error.code !== 'PGRST116') {
+    throw new Error(`[db] selectOneAdmin ${table} error: ${error.message}`)
+  }
+  return (data as T) ?? null
 }
