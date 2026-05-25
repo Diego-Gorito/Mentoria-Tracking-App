@@ -33,7 +33,7 @@ export function Dashboard({ onNavigate }: Props) {
         <div>
           <h1 className="text-h2 font-semibold text-fg-on-dark">Dashboard</h1>
           <p className="text-body-sm text-fg-on-dark-muted mt-0.5">
-            {tenant?.name ?? 'Visao geral do tracking'}
+            {tenant?.name ?? 'Visão geral do tracking'}
           </p>
         </div>
 
@@ -42,7 +42,7 @@ export function Dashboard({ onNavigate }: Props) {
           className="inline-flex p-1 rounded-lg border"
           style={{ background: 'var(--app-card-bg)', borderColor: 'var(--app-card-border)' }}
           role="tablist"
-          aria-label="Periodo de analise"
+          aria-label="Período de análise"
         >
           {WINDOW_OPTIONS.map((opt) => {
             const active = opt.value === windowDays
@@ -67,7 +67,7 @@ export function Dashboard({ onNavigate }: Props) {
             type="button"
             disabled
             aria-disabled="true"
-            title="Range customizado disponivel na Era 2"
+            title="Range customizado disponível na Era 2"
             className="h-8 px-3 rounded-md text-body-sm text-fg-on-dark-subtle inline-flex items-center gap-1.5 opacity-60 cursor-not-allowed"
           >
             <Calendar size={14} weight="duotone" />

@@ -1,7 +1,7 @@
 // DashboardKpis — 6 KPI cards com dados reais do Worker /api/analytics/summary
-// Skeleton loading + empty state quando sem dados.
+// Skeleton loading + empty state quando sem dados + error state com retry.
 
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import {
   Users,
   Target,
@@ -13,6 +13,7 @@ import {
 import type { Icon } from '@phosphor-icons/react'
 import { useAnalyticsSummary } from '@/hooks/useAnalytics'
 import type { Period } from '@/hooks/useAnalytics'
+import { ErrorState } from '@/components/ui/ErrorState'
 
 type Tone = 'neutral' | 'success' | 'warning' | 'danger'
 
@@ -63,7 +64,11 @@ function KpiSkeleton() {
 
 export function DashboardKpis({ windowDays }: { windowDays: number }) {
   const period: Period = windowDays === 7 ? '7d' : windowDays === 90 ? '90d' : '30d'
-  const { data, loading } = useAnalyticsSummary(period)
+  const { data, loading, error } = useAnalyticsSummary(period)
+
+  // refetch: recriar o hook triggering via key seria ideal, mas aqui usamos um
+  // workaround simples — recarregar a página é aceitável em erro de rede.
+  const handleRetry = useCallback(() => { window.location.reload() }, [])
 
   const kpis = useMemo<KpiSpec[]>(() => {
     if (!data) return []
@@ -75,12 +80,12 @@ export function DashboardKpis({ windowDays }: { windowDays: number }) {
       {
         label: 'Leads totais',
         value: leads_total.toLocaleString('pt-BR'),
-        hint: `Ultimos ${windowDays} dias`,
+        hint: `Últimos ${windowDays} dias`,
         icon: Users,
         delta: formatDelta(leads_delta_pct),
       },
       {
-        label: 'Conversoes',
+        label: 'Conversões',
         value: conversions_total.toLocaleString('pt-BR'),
         hint: formatBRL(conversions_value_brl),
         icon: Target,
@@ -94,7 +99,7 @@ export function DashboardKpis({ windowDays }: { windowDays: number }) {
       {
         label: 'ROAS blended',
         value: `${roas.toFixed(2)}x`,
-        hint: roas >= 1 ? 'Lucrativo' : 'No prejuizo',
+        hint: roas >= 1 ? 'Lucrativo' : 'No prejuízo',
         icon: TrendUp,
         tone: roas >= 1 ? 'success' : 'danger',
       },
@@ -118,6 +123,20 @@ export function DashboardKpis({ windowDays }: { windowDays: number }) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {Array.from({ length: 6 }).map((_, i) => <KpiSkeleton key={i} />)}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div
+        className="rounded-xl border mb-8"
+        style={{ background: 'var(--app-card-bg)', borderColor: 'var(--app-card-border)' }}
+      >
+        <ErrorState
+          message={`Falha ao carregar KPIs: ${error}`}
+          onRetry={handleRetry}
+        />
       </div>
     )
   }

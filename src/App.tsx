@@ -19,11 +19,13 @@ import { Wizard } from '@/routes/onboarding/Wizard'
 // App routes — Uma
 import { Dashboard } from '@/routes/dashboard/Dashboard'
 import { Integrations } from '@/routes/settings/Integrations'
+import { LeadsList } from '@/routes/leads/LeadsList'
+import { LeadDetail } from '@/routes/leads/LeadDetail'
 import { AppShell } from '@/components/layout/AppShell'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Logo } from '@/components/ui/Logo'
 import { Button } from '@/components/ui/Button'
-import { Pulse, Target, Users, Gear } from '@phosphor-icons/react'
+import { Pulse, Target, Gear } from '@phosphor-icons/react'
 
 type Route =
   | 'landing'
@@ -79,6 +81,7 @@ const VALID_ROUTES: Route[] = [
 
 export function App() {
   const [route, setRoute] = useState<Route>(resolveInitialRoute)
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
 
   function navigate(href: string) {
     const clean = href.replace(/^\//, '').split('?')[0]
@@ -198,16 +201,25 @@ export function App() {
                 </AppShell>
               )}
 
-              {/* Leads */}
-              {route === 'leads' && (
-                <AppShell activePath={activePath} onNavigate={navigate}>
-                  <EmptyState
-                    icon={Users}
-                    title="Nenhum lead capturado ainda"
-                    description="Leads com score e canal de origem aparecerão aqui assim que o tracking estiver ativo."
-                    action={{ label: 'Ativar tracking', onClick: () => navigate('integracoes') }}
-                  />
-                </AppShell>
+              {/* Leads — lista + detalhe */}
+              {route === 'leads' && !selectedLeadId && (
+                <LeadsList
+                  onNavigate={navigate}
+                  onSelectLead={(id) => {
+                    setSelectedLeadId(id)
+                    window.history.pushState({}, '', `/leads/${id}`)
+                  }}
+                />
+              )}
+              {route === 'leads' && selectedLeadId && (
+                <LeadDetail
+                  leadId={selectedLeadId}
+                  onNavigate={navigate}
+                  onBack={() => {
+                    setSelectedLeadId(null)
+                    window.history.pushState({}, '', '/leads')
+                  }}
+                />
               )}
 
               {/* Configurações */}

@@ -44,7 +44,7 @@ export const PLATFORM_META: Record<PlatformId, PlatformMeta> = {
   meta_capi: {
     label: 'Meta',
     emoji: '📘',
-    description: 'Captura conversoes via Conversions API.',
+    description: 'Captura conversões via Conversions API.',
     docs: 'https://developers.facebook.com/docs/marketing-api/conversions-api',
     fields: [
       {
@@ -52,7 +52,7 @@ export const PLATFORM_META: Record<PlatformId, PlatformMeta> = {
         label: 'Pixel ID',
         placeholder: '1234567890123456',
         required: true,
-        help: 'Acesse Eventos -> Gerenciador de Eventos -> Selecione seu pixel. O ID aparece no topo da pagina.',
+        help: 'Acesse Eventos -> Gerenciador de Eventos -> Selecione seu pixel. O ID aparece no topo da página.',
       },
       {
         key: 'access_token',
@@ -60,14 +60,14 @@ export const PLATFORM_META: Record<PlatformId, PlatformMeta> = {
         placeholder: 'EAAxxxxxxxxxxxxxxxx',
         required: true,
         secret: true,
-        help: 'Business Manager -> Configuracoes do negocio -> Usuarios -> Usuarios do sistema -> Gerar token. Permissoes: ads_management + business_management.',
+        help: 'Business Manager -> Configurações do negócio -> Usuários -> Usuários do sistema -> Gerar token. Permissões: ads_management + business_management.',
       },
       {
         key: 'ad_account_id',
         label: 'Ad Account ID',
         placeholder: 'act_1234567890',
         required: true,
-        help: 'Gerenciador de Anuncios -> Configuracoes da conta. Inclua o prefixo "act_".',
+        help: 'Gerenciador de Anúncios -> Configurações da conta. Inclua o prefixo "act_".',
       },
     ],
   },
@@ -113,7 +113,7 @@ export const PLATFORM_META: Record<PlatformId, PlatformMeta> = {
         label: 'Container ID Server',
         placeholder: 'GTM-YYYYYYY',
         required: true,
-        help: 'Tag Manager -> Workspace -> Container Server (precisa ser sGTM self-hosted, nao Stape).',
+        help: 'Tag Manager -> Workspace -> Container Server (precisa ser sGTM self-hosted, não Stape).',
       },
     ],
   },
@@ -128,7 +128,7 @@ export const PLATFORM_META: Record<PlatformId, PlatformMeta> = {
         label: 'Account ID',
         placeholder: '12345',
         required: true,
-        help: 'Chatwoot -> Configuracoes do perfil -> Account ID (no menu superior direito).',
+        help: 'Chatwoot -> Configurações do perfil -> Account ID (no menu superior direito).',
       },
       {
         key: 'api_token',
@@ -159,7 +159,7 @@ export const PLATFORM_META: Record<PlatformId, PlatformMeta> = {
         label: 'Ad Account ID',
         placeholder: '549123456789',
         required: true,
-        help: 'Pinterest Ads -> Conta de anuncios -> Detalhes. O ID tem 12+ digitos.',
+        help: 'Pinterest Ads -> Conta de anúncios -> Detalhes. O ID tem 12+ dígitos.',
       },
       {
         key: 'access_token',
@@ -167,7 +167,7 @@ export const PLATFORM_META: Record<PlatformId, PlatformMeta> = {
         placeholder: 'pina_xxxxxxxxxxxxxx',
         required: true,
         secret: true,
-        help: 'Pinterest Business -> Apps & API -> Acesso a API -> Gerar token. Permissoes: ads:read + conversions:read.',
+        help: 'Pinterest Business -> Apps & API -> Acesso à API -> Gerar token. Permissões: ads:read + conversions:read.',
       },
     ],
   },
@@ -182,7 +182,7 @@ export const PLATFORM_META: Record<PlatformId, PlatformMeta> = {
         label: 'Conversion ID',
         placeholder: 'AW-123456789',
         required: true,
-        help: 'Google Ads -> Ferramentas -> Conversoes -> Acoes -> Tag. Formato AW-XXXXXXXXX.',
+        help: 'Google Ads -> Ferramentas -> Conversões -> Ações -> Tag. Formato AW-XXXXXXXXX.',
       },
       {
         key: 'conversion_label',

@@ -1,46 +1,90 @@
-// useCredentials — lista credenciais do tenant atual (pós-login).
-// TODO: implementar com credentialsApi.list (Era 1 sprint 2).
+// useCredentials — lista credenciais do tenant via /api/credentials/:tenantId.
+// Substitui mock localStorage anterior.
+// Pattern loading/error/data consistente com useAnalytics.
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { credentialsApi } from '@/lib/api'
 import { useTenant } from './useTenant'
+
+export type CredentialStatus =
+  | 'not_configured'
+  | 'configured_not_validated'
+  | 'configured_validated'
+  | 'error'
 
 export type CredentialEntry = {
   providerId: string
-  status: 'not_configured' | 'configured_not_validated' | 'configured_validated' | 'error'
+  status: CredentialStatus
   lastValidatedAt: string | null
   extraConfig: Record<string, unknown>
+}
+
+// Shape que o backend retorna (mapeado pra CredentialEntry)
+type ApiCredential = {
+  provider_id?: string
+  providerId?: string
+  status?: CredentialStatus
+  last_validated_at?: string | null
+  lastValidatedAt?: string | null
+  extra_config?: Record<string, unknown>
+  extraConfig?: Record<string, unknown>
+}
+
+function normalizeCredential(raw: ApiCredential): CredentialEntry {
+  return {
+    providerId: raw.provider_id ?? raw.providerId ?? '',
+    status: raw.status ?? 'not_configured',
+    lastValidatedAt: raw.last_validated_at ?? raw.lastValidatedAt ?? null,
+    extraConfig: raw.extra_config ?? raw.extraConfig ?? {},
+  }
 }
 
 export function useCredentials(): {
   credentials: CredentialEntry[]
   loading: boolean
   error: string | null
+  refresh: () => void
 } {
-  const { tenant } = useTenant()
+  const { tenant, loading: tenantLoading } = useTenant()
   const [credentials, setCredentials] = useState<CredentialEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
+
+  const refresh = useCallback(() => setTick((n) => n + 1), [])
 
   useEffect(() => {
-    if (!tenant) {
+    if (tenantLoading) return
+
+    if (!tenant?.tenantId) {
+      setCredentials([])
       setLoading(false)
       return
     }
 
-    // TODO: substituir por credentialsApi.list(tenant.tenantId)
-    const MOCK_CREDENTIALS: CredentialEntry[] = [
-      { providerId: 'meta_capi', status: 'not_configured', lastValidatedAt: null, extraConfig: {} },
-      { providerId: 'hotmart', status: 'not_configured', lastValidatedAt: null, extraConfig: {} },
-      { providerId: 'gtm_server', status: 'not_configured', lastValidatedAt: null, extraConfig: {} },
-      { providerId: 'chatwoot', status: 'not_configured', lastValidatedAt: null, extraConfig: {} },
-      { providerId: 'pinterest_capi', status: 'not_configured', lastValidatedAt: null, extraConfig: {} },
-      { providerId: 'google_ads', status: 'not_configured', lastValidatedAt: null, extraConfig: {} },
-    ]
-
-    setCredentials(MOCK_CREDENTIALS)
-    setLoading(false)
+    let cancelled = false
+    setLoading(true)
     setError(null)
-  }, [tenant])
 
-  return { credentials, loading, error }
+    credentialsApi
+      .list(tenant.tenantId)
+      .then((raw) => {
+        if (cancelled) return
+        const items = Array.isArray(raw)
+          ? (raw as ApiCredential[]).map(normalizeCredential)
+          : []
+        setCredentials(items)
+        setLoading(false)
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        setError(e instanceof Error ? e.message : 'Erro ao carregar credenciais')
+        setLoading(false)
+      })
+
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenant?.tenantId, tenantLoading, tick])
+
+  return { credentials, loading, error, refresh }
 }
