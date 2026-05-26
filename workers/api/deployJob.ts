@@ -13,13 +13,16 @@
  *   3. provider.deployPlugin(...) (F-S04)
  *   4. mark uploaded_pending_activation + upload_dir_name
  *   5. activation fallback D — TODO (ADR-0008 §3.4) — apenas marca explicitamente
- *   6. validate(domain, expectedContainerId) (F-S06 stub — TODO)
+ *   6. validate(domain, expectedContainerId) (F-S06 real)
  *   7. mark installed | failed + last_validation_result
  *   8. releaseLock(id)
  *
  * Erros capturados → updateInstallation status='failed' + appendAudit
  * 'upload_failed' + release lock. Worker NUNCA throw (executado via
  * setImmediate, sem caller pra capturar).
+ *
+ * Todos os audit appends usam `appendAuditWithSanitization` (F-S07) — payload
+ * passa por whitelist/blacklist antes de gravar (LGPD-safe by default).
  */
 
 import type { IGtmStorage } from '../lib/storage';
@@ -27,6 +30,7 @@ import type { GtmInstallation, ISO8601, InstallationId } from '../lib/storage/ty
 import type { IHostingProvider } from '../lib/providers';
 import { TokenInvalidError, RateLimitError, DomainNotOwnedError } from '../lib/providers/errors';
 import { validate as runValidator, type ValidationResult } from '../lib/validator';
+import { appendAuditWithSanitization } from '../lib/audit';
 
 export interface DeployJobDeps {
   storage: IGtmStorage;
@@ -86,11 +90,11 @@ export async function deployJob(
       last_attempted_at: nowIso(),
     });
 
-    await storage.appendAudit({
+    await appendAuditWithSanitization(storage, {
       installation_id: installationId,
       tenant_id: installation.tenant_id,
       action: 'upload_started',
-      payload: { attempt: installation.attempt_count },
+      rawPayload: { retry_attempt: installation.attempt_count },
       actor_source: 'tracking-api',
     });
 
@@ -117,13 +121,13 @@ export async function deployJob(
       upload_dir_name: deployResult.uploadDirName,
     });
 
-    await storage.appendAudit({
+    await appendAuditWithSanitization(storage, {
       installation_id: installationId,
       tenant_id: installation.tenant_id,
       action: 'upload_complete',
-      payload: {
+      rawPayload: {
         upload_dir_name: deployResult.uploadDirName,
-        files_ok: deployResult.summary?.successful,
+        file_count: deployResult.summary?.successful,
       },
       actor_source: 'tracking-api',
     });
@@ -135,7 +139,7 @@ export async function deployJob(
       status: 'activating',
     });
 
-    // Step 6 — validate (TODO F-S06 stub)
+    // Step 6 — validate (F-S06 real, 2-stage HEAD+GET)
     const validation = await validateFn(
       installation.site_domain,
       installation.gtm_container_id,
@@ -160,14 +164,15 @@ export async function deployJob(
       ...(installedAt ? { installed_at: installedAt } : {}),
     });
 
-    await storage.appendAudit({
+    await appendAuditWithSanitization(storage, {
       installation_id: installationId,
       tenant_id: installation.tenant_id,
       action: validation.passed ? 'validation_passed' : 'validation_failed',
-      payload: {
-        stage: validation.stage,
-        passed: validation.passed,
-      },
+      // Nota: `stage`/`passed` não estão na whitelist (ADR-0008 §3.7 lista
+      // apenas 7 keys safe). Wrapper filtra. Detalhes ricos vivem em
+      // installation.last_validation_result (typed). Audit apenas marca o
+      // evento ocorreu (action é suficiente pra forensic).
+      rawPayload: {},
       actor_source: 'tracking-api',
     });
 
@@ -190,11 +195,11 @@ export async function deployJob(
           status: 'failed',
           last_error: truncated,
         });
-        await storage.appendAudit({
+        await appendAuditWithSanitization(storage, {
           installation_id: installationId,
           tenant_id: current.tenant_id,
           action: 'upload_failed',
-          payload: { code, error: truncated },
+          rawPayload: { error_summary: truncated },
           actor_source: 'tracking-api',
         });
       }

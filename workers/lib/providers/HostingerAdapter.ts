@@ -30,15 +30,18 @@
  * (`tracking.gtm_installations` per F-S01 RedisGtmStorage), NÃO no
  * filesystem. Cleanup de orphans é Onda 1.5 (F-S15 runbook).
  *
- * ## Audit logging (ADR-0008 §3.7)
+ * ## Audit logging (ADR-0008 §3.7 + F-S07)
  *
- * Cada retry attempt + final result chamam `storage.appendAudit(...)` se
- * `storage` + `installationId` fornecidos no constructor. Payload é
- * LGPD-safe (só metadata: status_code, timing_ms, upload_dir_name). Raw
- * response Hostinger fica em Docker stdout 7d retention.
+ * Cada retry attempt + final result chamam `appendAuditWithSanitization(...)` se
+ * `storage` + `installationId` + `tenantId` fornecidos no constructor.
+ * Wrapper aplica whitelist (7 keys ADR-0008 §3.7) + blacklist regex —
+ * LGPD-safe by default (tokens/passwords removidos silenciosamente mesmo
+ * se caller construir payload com keys sensíveis por engano). Raw response
+ * Hostinger fica em Docker stdout 7d retention.
  *
  * @see docs/adr-0008-auto-provisioner-gtm-architecture.md §3.1, §3.3, §3.7, §3.9
  * @see docs/stories/F-S04.md
+ * @see docs/stories/F-S07.md
  */
 
 import type {
@@ -55,6 +58,7 @@ import {
 } from './errors';
 import type { IGtmStorage, InstallationId, TenantId } from '../storage';
 import { withRetry } from '../retry';
+import { appendAuditWithSanitization } from '../audit';
 
 const HOSTINGER_API_BASE = 'https://api.hostinger.com/api/hosting/v1';
 const LIST_SITES_CACHE_TTL_MS = 60_000;
@@ -243,7 +247,8 @@ export class HostingerAdapter implements IHostingProvider {
         attempts: 3,
         backoff: [1000, 2000, 4000],
         onRetry: async (err, attemptNumber) => {
-          // AC-6: audit cada retry attempt (não o initial)
+          // AC-6: audit cada retry attempt (não o initial).
+          // Payload usa só keys whitelist (F-S07 sanitization).
           await this.safeAppendAudit({
             action: 'upload_started',
             payload: {
@@ -251,20 +256,19 @@ export class HostingerAdapter implements IHostingProvider {
               status_code: this.extractStatusCode(err),
               timing_ms: Date.now() - startedAt,
               site_domain: opts.domain,
-              slug: opts.slug,
             },
           });
         },
       });
     } catch (err) {
-      // Final failure → audit + mapeia pra ProviderError hierarchy
+      // Final failure → audit + mapeia pra ProviderError hierarchy.
+      // Payload usa só keys whitelist (F-S07 sanitization).
       await this.safeAppendAudit({
         action: 'upload_failed',
         payload: {
           status_code: this.extractStatusCode(err),
           timing_ms: Date.now() - startedAt,
           site_domain: opts.domain,
-          slug: opts.slug,
           error_summary: this.truncate(this.errorMessage(err), 500),
         },
       });
@@ -290,18 +294,18 @@ export class HostingerAdapter implements IHostingProvider {
       errorSummary: raw.error ? this.truncate(String(raw.error), 500) : undefined,
     };
 
-    // AC-6: audit final result
+    // AC-6: audit final result.
+    // Payload usa só keys whitelist (F-S07 sanitization). file_count agrega
+    // successful + failed; detalhes ricos vivem em DeployResult.summary que
+    // o caller (deployJob) tem em mãos.
     await this.safeAppendAudit({
       action: status === 'failed' ? 'upload_failed' : 'upload_complete',
       payload: {
         status_code: 200,
         timing_ms: Date.now() - startedAt,
         site_domain: opts.domain,
-        slug: opts.slug,
         upload_dir_name: uploadDirName,
         file_count: successful + failed,
-        successful,
-        failed,
       },
     });
 
@@ -431,6 +435,10 @@ export class HostingerAdapter implements IHostingProvider {
   /**
    * Audit log graceful: no-op se storage / installationId / tenantId ausentes.
    * Erros do storage NÃO propagam — audit é best-effort.
+   *
+   * Usa `appendAuditWithSanitization` (F-S07) pra garantir LGPD-safe payload
+   * — tokens/passwords/secrets removidos via blacklist regex mesmo se algum
+   * caller construir payload com keys sensíveis por engano.
    */
   private async safeAppendAudit(input: {
     action: Parameters<IGtmStorage['appendAudit']>[0]['action'];
@@ -438,11 +446,11 @@ export class HostingerAdapter implements IHostingProvider {
   }): Promise<void> {
     if (!this.storage || !this.installationId || !this.tenantId) return;
     try {
-      await this.storage.appendAudit({
+      await appendAuditWithSanitization(this.storage, {
         installation_id: this.installationId,
         tenant_id: this.tenantId,
         action: input.action,
-        payload: input.payload,
+        rawPayload: input.payload,
         actor_source: 'tracking-api',
       });
     } catch (err) {

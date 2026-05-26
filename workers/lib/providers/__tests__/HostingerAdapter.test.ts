@@ -384,13 +384,14 @@ describe('HostingerAdapter audit logging (AC-6)', () => {
       }),
     });
 
-    // Última call = upload_complete com upload_dir_name
+    // Última call = upload_complete com upload_dir_name + file_count.
+    // Nota: payload passou por F-S07 safeAuditPayload — `successful`/`failed`
+    // viraram `file_count` agregado (única key de contagem na whitelist).
     expect(appendAudit.mock.calls[2][0]).toMatchObject({
       action: 'upload_complete',
       payload: expect.objectContaining({
         upload_dir_name: 'gtm4wp-mentoria-Final',
-        successful: 3,
-        failed: 0,
+        file_count: 3,
       }),
     });
   });

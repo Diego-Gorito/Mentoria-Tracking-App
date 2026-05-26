@@ -38,6 +38,7 @@ import {
 import { LockConflictError, NotFoundError } from './errors';
 import { deployJob, type DeployJobDeps } from './deployJob';
 import { validate as runValidator } from '../lib/validator';
+import { appendAuditWithSanitization } from '../lib/audit';
 
 // ---------- Zod schemas ----------
 
@@ -157,14 +158,13 @@ export function createInstallationsRouter(
       created_by: ctx.userId,
     });
 
-    await storage.appendAudit({
+    await appendAuditWithSanitization(storage, {
       installation_id: installation.id,
       tenant_id: installation.tenant_id,
       action: 'draft_created',
-      payload: {
-        brand_slug: installation.brand_slug,
-        gtm_container_id: installation.gtm_container_id,
-      },
+      // brand_slug/gtm_container_id não estão na whitelist (ADR-0008 §3.7);
+      // wrapper filtra. Action + installation.* já têm os dados typed.
+      rawPayload: { site_domain: installation.site_domain },
       actor_user_id: ctx.userId,
       actor_source: 'tracking-api',
     });
@@ -271,15 +271,13 @@ export function createInstallationsRouter(
       status: newStatus,
     });
 
-    await storage.appendAudit({
+    await appendAuditWithSanitization(storage, {
       installation_id: id,
       tenant_id: installation.tenant_id,
       action: result.passed ? 'validation_passed' : 'validation_failed',
-      payload: {
-        stage: result.stage,
-        passed: result.passed,
-        revalidate: true,
-      },
+      // stage/passed/revalidate não estão na whitelist (ADR-0008 §3.7);
+      // wrapper filtra. Dados ricos vivem em last_validation_result typed.
+      rawPayload: { site_domain: installation.site_domain },
       actor_user_id: ctx.userId,
       actor_source: 'tracking-api',
     });
@@ -307,11 +305,13 @@ export function createInstallationsRouter(
     // AC-9 step 1 — soft delete (status='uninstalled'); cleanup WP é Onda 1.5.
     await storage.updateInstallation(id, { status: 'uninstalled' });
 
-    await storage.appendAudit({
+    await appendAuditWithSanitization(storage, {
       installation_id: id,
       tenant_id: installation.tenant_id,
       action: 'uninstalled',
-      payload: { soft_delete: true },
+      // soft_delete não está na whitelist — action='uninstalled' já carrega
+      // a semântica. Wrapper retorna {}.
+      rawPayload: { site_domain: installation.site_domain },
       actor_user_id: ctx.userId,
       actor_source: 'tracking-api',
     });
