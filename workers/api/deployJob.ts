@@ -25,12 +25,15 @@
  * passa por whitelist/blacklist antes de gravar (LGPD-safe by default).
  */
 
+import type { Redis as RedisClient } from 'ioredis';
+
 import type { IGtmStorage } from '../lib/storage';
 import type { GtmInstallation, ISO8601, InstallationId } from '../lib/storage/types';
 import type { IHostingProvider } from '../lib/providers';
 import { TokenInvalidError, RateLimitError, DomainNotOwnedError } from '../lib/providers/errors';
 import { validate as runValidator, type ValidationResult } from '../lib/validator';
 import { appendAuditWithSanitization } from '../lib/audit';
+import { publishEvent, type SseEvent } from '../lib/sseBus';
 
 export interface DeployJobDeps {
   storage: IGtmStorage;
@@ -49,6 +52,14 @@ export interface DeployJobDeps {
     domain: string,
     expectedContainerId: string,
   ) => Promise<ValidationResult>;
+  /**
+   * Client Redis usado pra publicar SSE events (F-S12 AC-2).
+   *
+   * Quando ausente, publish é no-op (não bloqueia o pipeline e mantém compat
+   * com tests legacy de F-S05 que não setam Redis client). Em produção, é
+   * injetado pelo `installations` router a partir do storage Redis singleton.
+   */
+  redisClient?: RedisClient;
 }
 
 function nowIso(): ISO8601 {
@@ -70,11 +81,25 @@ export async function deployJob(
   installationId: InstallationId,
   deps: DeployJobDeps,
 ): Promise<void> {
-  const { storage, getProvider, buildPlugin, validate } = deps;
+  const { storage, getProvider, buildPlugin, validate, redisClient } = deps;
   const buildFn = buildPlugin ?? defaultBuildPluginStub;
   const validateFn = validate ?? runValidator;
 
+  /**
+   * Helper local — publica em Redis LIST `gtm:events:<id>` (F-S12 AC-2).
+   * No-op se `redisClient` não setado (compat com tests legacy F-S05).
+   * Captura erros internamente (`publishEvent` já é best-effort).
+   *
+   * Source UX: `docs/ux-auto-provisioner-gtm-flow.md` §3 Tela 5 (real-time).
+   */
+  const emit = async (event: SseEvent): Promise<void> => {
+    if (!redisClient) return;
+    await publishEvent(redisClient, installationId, event);
+  };
+
   let installation: GtmInstallation | null = null;
+  // Timings pra incluir em `timing_ms` no evento (F-S12 AC-2 shape JSON).
+  const tStart = Date.now();
 
   try {
     installation = await storage.getInstallation(installationId);
@@ -84,6 +109,8 @@ export async function deployJob(
     }
 
     // Step 1 — mark uploading
+    await emit({ step: 'upload_started', status: 'in_progress' });
+
     installation = await storage.updateInstallation(installationId, {
       status: 'uploading',
       attempt_count: installation.attempt_count + 1,
@@ -103,6 +130,7 @@ export async function deployJob(
 
     // Step 3 — provider.deployPlugin
     const provider = await getProvider(installation);
+    const tUpload = Date.now();
     const deployResult = await provider.deployPlugin({
       domain: installation.site_domain,
       slug: `gtm4wp-${installation.brand_slug}`,
@@ -119,6 +147,12 @@ export async function deployJob(
     installation = await storage.updateInstallation(installationId, {
       status: 'uploaded_pending_activation',
       upload_dir_name: deployResult.uploadDirName,
+    });
+
+    await emit({
+      step: 'upload_complete',
+      status: 'done',
+      timing_ms: Date.now() - tUpload,
     });
 
     await appendAuditWithSanitization(storage, {
@@ -139,7 +173,11 @@ export async function deployJob(
       status: 'activating',
     });
 
+    await emit({ step: 'activation_started', status: 'in_progress' });
+
     // Step 6 — validate (F-S06 real, 2-stage HEAD+GET)
+    await emit({ step: 'validation_started', status: 'in_progress' });
+    const tValidate = Date.now();
     const validation = await validateFn(
       installation.site_domain,
       installation.gtm_container_id,
@@ -162,6 +200,19 @@ export async function deployJob(
         details: detailsNormalized,
       },
       ...(installedAt ? { installed_at: installedAt } : {}),
+    });
+
+    await emit({
+      step: validation.passed ? 'validation_passed' : 'validation_failed',
+      status: validation.passed ? 'done' : 'failed',
+      timing_ms: Date.now() - tValidate,
+    });
+
+    // Step 7b — terminal event (UX §3 Tela 5: encerra modal progress).
+    await emit({
+      step: validation.passed ? 'installed' : 'failed',
+      status: validation.passed ? 'done' : 'failed',
+      timing_ms: Date.now() - tStart,
     });
 
     await appendAuditWithSanitization(storage, {
@@ -187,6 +238,20 @@ export async function deployJob(
     else if (err instanceof DomainNotOwnedError) code = 'DOMAIN_NOT_OWNED';
 
     console.error(`[deployJob] failed id=${installationId} code=${code} msg=${truncated}`);
+
+    // F-S12 AC-2: publica upload_failed + terminal `failed` pra SSE consumer
+    // saber que o pipeline encerrou em erro. Best-effort (publishEvent swallows).
+    await emit({
+      step: 'upload_failed',
+      status: 'failed',
+      error: truncated,
+    });
+    await emit({
+      step: 'failed',
+      status: 'failed',
+      timing_ms: Date.now() - tStart,
+      error: truncated,
+    });
 
     try {
       const current = installation ?? (await storage.getInstallation(installationId));

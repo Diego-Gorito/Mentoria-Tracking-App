@@ -1,18 +1,20 @@
-// useInstallTracking.ts — F-S11 AC-3
+// useInstallTracking.ts — F-S11 AC-3 + F-S12 SSE integration
 // Tracking de install GTM: cria installation + dispara deploy + observa progresso.
 //
-// Stack atual (Onda 1):
-//   - start(brandSlug) → POST /api/installations + POST /api/installations/:id/deploy
-//   - Polling fallback `GET /api/installations/:id` a cada 2s até status final.
+// Stack (F-S12 integrated):
+//   - start(brandSlug, ctx?) → POST /api/installations + POST /:id/deploy
+//   - EventSource `/api/installations/:id/events?token=<jwt>` (SSE real-time)
+//   - Fallback polling 2s em onerror (F-S12 AC-6)
 //
-// @todo F-S12 — substituir polling por EventSource subscribe gtm:events:<id>
-//   via /api/installations/:id/events (SSE). Quando F-S12 lançar:
-//     1) Remover startPolling() / setInterval
-//     2) Abrir EventSource(`/api/installations/${id}/events`) em start()
-//     3) onmessage → atualizar progress step-by-step
-//     4) Final event 'installed' | 'failed' → atualizar status
-//     5) Cleanup unsubscribe SSE em useEffect cleanup
-//     6) Manter fallback polling pra error onerror (F-S12 AC-6)
+// EventSource browser limitação: não suporta custom headers. Solução: anexar
+// JWT como `?token=` query param. Backend authMiddleware aceita ambos
+// (Authorization header preferido, ?token fallback). Tradeoff de segurança:
+// token aparece em access logs server — aceito MVP pra simplicidade.
+//
+// Eventos SSE publicados pelo worker (F-S12 backend, ordem happy path):
+//   upload_started → upload_complete (timing_ms) → activation_started →
+//   validation_started → validation_passed (timing_ms) → installed (timing_ms total)
+// Failure: validation_failed OU (catch) upload_failed + terminal failed (error)
 //
 // Edge Case 5 (story): segundo start() pode receber 409 → translateApiError
 // transforma em "Outro deploy em andamento" (caller deve toast).
@@ -28,8 +30,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/sitesApi';
 import { translateApiError } from '@/lib/translateApiError';
+import { getToken } from '@/lib/auth';
 import type { BrandSlug } from '@/types/sites';
 import type { GtmInstallation, ValidationResult } from '@/types/hosting';
+
+/** Shape canônica dos eventos SSE publicados pelo worker (F-S12 sseBus). */
+interface SseEventPayload {
+  step: string;
+  status: 'in_progress' | 'done' | 'failed';
+  timing_ms?: number;
+  error?: string;
+}
+
+const TERMINAL_STEPS = new Set(['installed', 'failed']);
 
 export type InstallTrackingStatus = 'idle' | 'installing' | 'installed' | 'failed';
 
@@ -76,6 +89,7 @@ export function useInstallTracking(siteId: string): UseInstallTrackingResult {
   const [result, setResult] = useState<ValidationResult | null>(null);
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
   const mountedRef = useRef(true);
   const siteContextRef = useRef<StartContext | null>(null);
 
@@ -88,6 +102,10 @@ export function useInstallTracking(siteId: string): UseInstallTrackingResult {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
+      if (eventSourceRef.current !== null) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     };
   }, []);
 
@@ -98,7 +116,16 @@ export function useInstallTracking(siteId: string): UseInstallTrackingResult {
     }
   }, []);
 
-  // Polling fallback até EventSource F-S12.
+  const stopEventSource = useCallback(() => {
+    if (eventSourceRef.current !== null) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  }, []);
+
+  // Polling fallback (F-S12 AC-6): usado quando EventSource falha (proxy block,
+  // browser sem suporte) OU como mecanismo backup pra status terminal mesmo se
+  // SSE perder o evento final.
   const startPolling = useCallback(
     (installationId: string) => {
       stopPolling();
@@ -152,6 +179,55 @@ export function useInstallTracking(siteId: string): UseInstallTrackingResult {
     [stopPolling],
   );
 
+  // F-S12 SSE subscribe — abre EventSource e atualiza progress step-by-step.
+  // Fallback pra startPolling em onerror (AC-6).
+  const startSSE = useCallback(
+    (installationId: string) => {
+      stopEventSource();
+      // EventSource não suporta Authorization header — anexa token via query.
+      const token = getToken();
+      if (!token) {
+        // Sem token Supabase → cai direto no polling (que via apiFetch usa header).
+        startPolling(installationId);
+        return;
+      }
+      const url = `/api/installations/${installationId}/events?token=${encodeURIComponent(token)}`;
+      const es = new EventSource(url);
+      eventSourceRef.current = es;
+
+      es.onmessage = (ev) => {
+        if (!mountedRef.current) return;
+        let evt: SseEventPayload;
+        try {
+          evt = JSON.parse(ev.data) as SseEventPayload;
+        } catch {
+          // Payload malformado — ignora (defensivo)
+          return;
+        }
+        setProgress({
+          step: evt.step,
+          status: evt.status,
+          timing_ms: evt.timing_ms,
+        });
+        if (TERMINAL_STEPS.has(evt.step)) {
+          if (evt.step === 'installed') setStatus('installed');
+          else if (evt.step === 'failed') setStatus('failed');
+          stopEventSource();
+          // Polling pós-SSE close pega install state final (last_validation_result).
+          startPolling(installationId);
+        }
+      };
+
+      es.onerror = () => {
+        // EventSource falhou (proxy timeout, network, browser) — degrada pra polling.
+        if (!mountedRef.current) return;
+        stopEventSource();
+        startPolling(installationId);
+      };
+    },
+    [startPolling, stopEventSource],
+  );
+
   const setSiteContext = useCallback((ctx: StartContext): void => {
     siteContextRef.current = ctx;
   }, []);
@@ -194,11 +270,8 @@ export function useInstallTracking(siteId: string): UseInstallTrackingResult {
         );
         if (!mountedRef.current) return;
 
-        // 3) @todo F-S12 — substituir startPolling por:
-        //    const es = new EventSource(`/api/installations/${installation.id}/events`);
-        //    es.onmessage = ev => { progress = JSON.parse(ev.data); ... };
-        //    es.onerror = () => startPolling(installation.id); // fallback F-S12 AC-6
-        startPolling(installation.id);
+        // 3) F-S12 SSE subscribe (com fallback polling em onerror)
+        startSSE(installation.id);
       } catch (err) {
         if (!mountedRef.current) throw err;
         const translated = translateApiError(err);
@@ -207,7 +280,7 @@ export function useInstallTracking(siteId: string): UseInstallTrackingResult {
         throw translated;
       }
     },
-    [startPolling],
+    [startSSE],
   );
 
   return useMemo(

@@ -15,7 +15,9 @@
  */
 
 import { Hono } from 'hono';
+import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
+import type { Redis as RedisClient } from 'ioredis';
 
 import { authMiddleware, getAuthCtx, type AuthContext } from './middleware';
 import { getStorage, type IGtmStorage } from '../lib/storage';
@@ -39,6 +41,13 @@ import { LockConflictError, NotFoundError } from './errors';
 import { deployJob, type DeployJobDeps } from './deployJob';
 import { validate as runValidator } from '../lib/validator';
 import { appendAuditWithSanitization } from '../lib/audit';
+import { getRedis } from '../lib/redis';
+import {
+  defaultPopEvent,
+  sseEventsKey,
+  type PopEventFn,
+  type SseEvent,
+} from '../lib/sseBus';
 
 // ---------- Zod schemas ----------
 
@@ -80,6 +89,25 @@ interface InstallationsDeps {
   validate?: DeployJobDeps['validate'];
   /** Override do buildPlugin (testes). */
   buildPlugin?: DeployJobDeps['buildPlugin'];
+  /**
+   * Client Redis usado pra publicar SSE events (deployJob) + consumir no
+   * endpoint `GET /:id/events` (F-S12 AC-2 + AC-3).
+   * Default: singleton `getRedis()` de `workers/lib/redis.ts`.
+   * Tests injetam ioredis-mock pra evitar Redis real.
+   */
+  redisClient?: RedisClient;
+  /**
+   * Consumer fn injetada (F-S12 AC-3). Default usa BRPOP (Redis prod).
+   * Tests passam variante rpop-based pra compat com ioredis-mock (que NÃO
+   * implementa BRPOP — confirmado em `node_modules/ioredis-mock/lib/index.js`).
+   */
+  popEvent?: PopEventFn;
+  /**
+   * Heartbeat interval (ms) entre `: ping\n\n` quando sem eventos (F-S12 AC-4).
+   * Default 15000ms (15s). Tests passam valor menor pra acelerar suite.
+   * Convertido pra segundos no BRPOP timeout.
+   */
+  heartbeatMs?: number;
 }
 
 // ---------- helpers ----------
@@ -124,6 +152,11 @@ export function createInstallationsRouter(
         void deployJob(id, jobDeps);
       });
     });
+
+  // F-S12: Redis client + consumer pra SSE (lazy default = singleton prod).
+  const getRedisClient = (): RedisClient => deps.redisClient ?? getRedis();
+  const popEvent: PopEventFn = deps.popEvent ?? defaultPopEvent;
+  const heartbeatMs = deps.heartbeatMs ?? 15_000;
 
   router.use('*', auth);
 
@@ -202,11 +235,13 @@ export function createInstallationsRouter(
     }
 
     // AC-6 step 2 — dispara worker async via setImmediate (ou override em tests).
+    // F-S12 AC-2: passa redisClient pro worker publicar SSE events.
     const jobDeps: DeployJobDeps = {
       storage,
       getProvider: async (_inst) => buildProviderForAccount(account, getProviderFn),
       buildPlugin: deps.buildPlugin,
       validate: deps.validate,
+      redisClient: deps.redisClient ?? getRedisClient(),
     };
 
     await scheduleDeploy(id, jobDeps);
@@ -236,6 +271,103 @@ export function createInstallationsRouter(
 
     c.header('Cache-Control', 'no-store');
     return c.json({ data: installation });
+  });
+
+  // ── GET /:id/audit-log ────────────────────────────────────────────────────
+  //
+  // F-S05 patch (F-S11 useAuditLog consume): retorna audit entries cronológicas
+  // pra UI (SiteDetailPage + SiteAuditLogPage F-S10). Limit default 50 — MVP
+  // single-tenant Diego ≤100/dia, paginação cursor-based fica Onda 1.5.
+  router.get('/:id/audit-log', async (c) => {
+    const id = c.req.param('id') as InstallationId;
+    const limitRaw = c.req.query('limit');
+    const limit = limitRaw ? Math.min(parseInt(limitRaw, 10) || 50, 200) : 50;
+    const storage = getStorageInstance();
+
+    const installation = await storage.getInstallation(id);
+    if (!installation) {
+      throw new NotFoundError('installation', id);
+    }
+
+    const entries = await storage.listAudit(id, limit);
+    return c.json({ data: entries });
+  });
+
+  // ── GET /:id/events (SSE) ─────────────────────────────────────────────────
+  //
+  // F-S12 AC-1 + AC-3 + AC-4 — stream progresso real-time pro modal frontend
+  // (`src/components/InstallProgressModal.tsx` em F-S09 + `useInstallTracking`
+  // em F-S11).
+  //
+  // UX source-of-truth: `docs/ux-auto-provisioner-gtm-flow.md` §3 Tela 5
+  // (modal step-by-step) + §10.5 (sugestão Dex SSE vs polling).
+  // ADR: ainda não há ADR formal pra SSE — F-S12 cria contract de fato.
+  //
+  // Flow:
+  //  1. Auth via authMiddleware (JWT Bearer, F-S05). @todo F-S12 frontend
+  //     integration — adicionar `?token` query param fallback pra contornar
+  //     limitação browser EventSource (não suporta custom headers). Discussão
+  //     em F-S12 §Edge Cases #6.
+  //  2. Valida installation existe (404 caso contrário).
+  //  3. Loop BRPOP `gtm:events:<id>` com timeout `heartbeatMs / 1000`s:
+  //     - evento: `stream.writeSSE({ data: json })`
+  //     - timeout: `stream.write(': ping\n\n')` (comment-line ignorado pelo
+  //       EventSource browser, mantém connection viva contra Caddy buffer)
+  //     - se step terminal (`installed | failed`): close stream.
+  //  4. Abort (client disconnect): break loop e fecha — stream.aborted é
+  //     setado por `streamSSE` quando ReadableStream cancela.
+  router.get('/:id/events', async (c) => {
+    const id = c.req.param('id') as InstallationId;
+    const storage = getStorageInstance();
+
+    const installation = await storage.getInstallation(id);
+    if (!installation) {
+      throw new NotFoundError('installation', id);
+    }
+
+    const redis = getRedisClient();
+    const key = sseEventsKey(id);
+
+    return streamSSE(c, async (stream) => {
+      // Aborta loop quando ReadableStream do client cancela.
+      // Note: `streamSSE` helper já cuida de fechar stream no finally.
+      while (!stream.aborted && !stream.closed) {
+        let payload: string | null;
+        try {
+          payload = await popEvent(redis, key, heartbeatMs);
+        } catch (err) {
+          // BRPOP error — log + sleep curto pra evitar busy loop, então tenta de novo.
+          // eslint-disable-next-line no-console
+          console.error(
+            `[sse] popEvent_failed id=${id} msg=${(err as Error).message}`,
+          );
+          await stream.sleep(500);
+          continue;
+        }
+
+        if (payload === null) {
+          // F-S12 AC-4: heartbeat ping previne timeout proxy (Caddy/Traefik
+          // Easypanel). Comment-line SSE (`:`) é ignorado pelo EventSource
+          // browser. Mantém connection viva sem mexer em event state.
+          await stream.write(': ping\n\n');
+          continue;
+        }
+
+        // Forward direto do payload do worker (JSON.stringify já feito por
+        // publishEvent). writeSSE adiciona `data: ` + `\n\n` final.
+        await stream.writeSSE({ data: payload });
+
+        // Steps terminais encerram o stream (F-S12 AC-3 step 4).
+        try {
+          const evt = JSON.parse(payload) as Partial<SseEvent>;
+          if (evt.step === 'installed' || evt.step === 'failed') {
+            break;
+          }
+        } catch {
+          // payload inválido — continua loop, frontend ignora.
+        }
+      }
+    });
   });
 
   // ── POST /:id/revalidate ──────────────────────────────────────────────────

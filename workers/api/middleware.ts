@@ -25,12 +25,17 @@ export type AuthContext = {
 }
 
 export async function authMiddleware(c: Context, next: Next): Promise<Response | void> {
+  // Browser EventSource NÃO suporta custom headers — F-S12 SSE endpoint usa
+  // fallback `?token=<jwt>` query param. Token em URL aparece em access logs
+  // (aceito tradeoff pra SSE; outros endpoints continuam preferindo header).
   const auth = c.req.header('Authorization')
-  if (!auth?.startsWith('Bearer ')) {
+  const headerToken = auth?.startsWith('Bearer ') ? auth.slice(7) : null
+  const queryToken = c.req.query('token') ?? null
+  const token = headerToken ?? queryToken
+
+  if (!token) {
     return c.json({ error: 'Acesso nao autorizado' }, 401)
   }
-
-  const token = auth.slice(7)
 
   try {
     const { data, error } = await supabaseAdmin.auth.getUser(token)
