@@ -9,10 +9,24 @@ import { serve } from '@hono/node-server'
 import authRouter from './auth'
 import analyticsRouter from './analytics'
 import onboardingRouter from './onboarding'
+import hostingAccountsRouter from './hosting-accounts'
+import sitesRouter from './sites'
+import installationsRouter from './installations'
 import { authMiddleware, getAuthCtx } from './middleware'
+import { requestIdMiddleware } from './requestId'
+import { errorHandler } from './errorHandler'
 import { supabaseAdmin } from './db'
 
 const app = new Hono()
+
+// Request ID middleware — gera UUID v4 por request + propaga em X-Request-ID
+// header. Precisa rodar ANTES de qualquer route handler/error handler pra que
+// requestId esteja disponível no errorHandler.
+app.use('*', requestIdMiddleware)
+
+// Central error handler — mapeia HttpError, ProviderError, ZodError → JSON
+// shape { error: { code, message, request_id } } per F-S05 AC-10.
+app.onError(errorHandler)
 
 // CORS — same-origin prod, localhost dev
 app.use(
@@ -52,6 +66,12 @@ app.route('/api/analytics', analyticsRouter)
 // --- Onboarding (autenticado — wizard 5 steps) ---
 
 app.route('/api/onboarding', onboardingRouter)
+
+// --- Auto-provisioner GTM (story F-S05 — autenticado via authMiddleware
+//     interno de cada router; usa storage Redis + provider Hostinger).
+app.route('/api/hosting-accounts', hostingAccountsRouter)
+app.route('/api/sites', sitesRouter)
+app.route('/api/installations', installationsRouter)
 
 // --- /api/me (autenticado) ---
 
