@@ -37,6 +37,7 @@ import {
 } from '../lib/constants';
 import { LockConflictError, NotFoundError } from './errors';
 import { deployJob, type DeployJobDeps } from './deployJob';
+import { validate as runValidator } from '../lib/validator';
 
 // ---------- Zod schemas ----------
 
@@ -248,29 +249,21 @@ export function createInstallationsRouter(
       throw new NotFoundError('installation', id);
     }
 
-    // AC-8 step 2 — chama validador (F-S06 não existe ainda — usa stub).
-    // @todo F-S06 — substituir pelo validator real.
-    const validate: NonNullable<DeployJobDeps['validate']> =
-      deps.validate ??
-      (async () => ({
-        passed: true,
-        stage: 'TODO_F_S06' as const,
-        details: undefined,
-      }));
+    // AC-8 step 2 — chama validador 2-stage (F-S06).
+    const validate: NonNullable<DeployJobDeps['validate']> = deps.validate ?? runValidator;
 
     const result = await validate(installation.site_domain, installation.gtm_container_id);
 
-    // Cast stage stub → 'head' pro storage (mesma decisão do deployJob).
-    const stageNormalized = result.stage === 'TODO_F_S06' ? 'head' : result.stage;
-    const newStatus: GtmInstallation['status'] = result.passed
-      ? 'installed'
-      : 'failed'; // story diz "drift_detected" mas o enum não tem — usa 'failed' com last_validation_result.passed=false marcando drift
+    // story diz "drift_detected" mas o enum GtmInstallation['status'] (Sprint 0
+    // lockado) não tem — usa 'failed' com last_validation_result.passed=false
+    // marcando drift implicitamente.
+    const newStatus: GtmInstallation['status'] = result.passed ? 'installed' : 'failed';
 
     await storage.updateInstallation(id, {
       last_validation_at: new Date().toISOString() as GtmInstallation['last_validation_at'],
       last_validation_result: {
         passed: result.passed,
-        stage: stageNormalized,
+        stage: result.stage,
         details: result.details as
           | NonNullable<GtmInstallation['last_validation_result']>['details']
           | undefined,

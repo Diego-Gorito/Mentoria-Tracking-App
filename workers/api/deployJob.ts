@@ -26,6 +26,7 @@ import type { IGtmStorage } from '../lib/storage';
 import type { GtmInstallation, ISO8601, InstallationId } from '../lib/storage/types';
 import type { IHostingProvider } from '../lib/providers';
 import { TokenInvalidError, RateLimitError, DomainNotOwnedError } from '../lib/providers/errors';
+import { validate as runValidator, type ValidationResult } from '../lib/validator';
 
 export interface DeployJobDeps {
   storage: IGtmStorage;
@@ -37,17 +38,13 @@ export interface DeployJobDeps {
    */
   buildPlugin?: (installation: GtmInstallation) => Promise<string> | string;
   /**
-   * Validador pós-deploy (head-only fast check).
-   * @todo F-S06 — implementar validador real. Stub atual retorna passed=true.
+   * Validador pós-deploy 2-stage (HEAD+GET). Default usa `validate` de
+   * `workers/lib/validator.ts` (F-S06). Tests podem injetar mock.
    */
   validate?: (
     domain: string,
     expectedContainerId: string,
-  ) => Promise<{
-    passed: boolean;
-    stage: 'head' | 'full' | 'TODO_F_S06';
-    details?: Record<string, unknown>;
-  }>;
+  ) => Promise<ValidationResult>;
 }
 
 function nowIso(): ISO8601 {
@@ -62,21 +59,6 @@ function defaultBuildPluginStub(_installation: GtmInstallation): string {
 }
 
 /**
- * @todo F-S06 — substituir por fetch + parse DOM pra detectar dataLayer +
- * gtm_container_id no head do site. Stub retorna passed=true sempre.
- */
-async function defaultValidateStub(
-  _domain: string,
-  _expectedContainerId: string,
-): Promise<{
-  passed: boolean;
-  stage: 'head' | 'full' | 'TODO_F_S06';
-  details?: Record<string, unknown>;
-}> {
-  return { passed: true, stage: 'TODO_F_S06' };
-}
-
-/**
  * Executa pipeline completo do deploy. NUNCA throw — captura tudo e marca
  * `status='failed'` se algo deu errado. Sempre libera o lock no finally.
  */
@@ -86,7 +68,7 @@ export async function deployJob(
 ): Promise<void> {
   const { storage, getProvider, buildPlugin, validate } = deps;
   const buildFn = buildPlugin ?? defaultBuildPluginStub;
-  const validateFn = validate ?? defaultValidateStub;
+  const validateFn = validate ?? runValidator;
 
   let installation: GtmInstallation | null = null;
 
@@ -163,9 +145,6 @@ export async function deployJob(
     const finalStatus: GtmInstallation['status'] = validation.passed ? 'installed' : 'failed';
     const installedAt: ISO8601 | undefined = validation.passed ? nowIso() : undefined;
 
-    // Cast: stage do stub é 'TODO_F_S06' mas o type GtmInstallation aceita só
-    // 'head'|'full'. Pós F-S06 implementado, stub some e cast vira no-op.
-    const stageNormalized = validation.stage === 'TODO_F_S06' ? 'head' : validation.stage;
     const detailsNormalized = validation.details as
       | NonNullable<GtmInstallation['last_validation_result']>['details']
       | undefined;
@@ -175,7 +154,7 @@ export async function deployJob(
       last_validation_at: nowIso(),
       last_validation_result: {
         passed: validation.passed,
-        stage: stageNormalized,
+        stage: validation.stage,
         details: detailsNormalized,
       },
       ...(installedAt ? { installed_at: installedAt } : {}),

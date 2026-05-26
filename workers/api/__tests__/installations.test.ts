@@ -73,6 +73,7 @@ function buildApp(opts: {
     creds: { token: string; wpAdminPassword?: string },
   ) => IHostingProvider;
   scheduleDeploy?: (id: InstallationId, deps: DeployJobDeps) => void | Promise<void>;
+  validate?: DeployJobDeps['validate'];
 }): Hono {
   const app = new Hono();
   app.use('*', requestIdMiddleware);
@@ -82,6 +83,7 @@ function buildApp(opts: {
     providerFactory: opts.providerFactory ?? (() => new MockProvider()),
     authOverride: bypassAuth(),
     scheduleDeploy: opts.scheduleDeploy,
+    validate: opts.validate,
   });
   app.route('/api/installations', router);
   return app;
@@ -236,12 +238,25 @@ describe('GET /api/installations/:id (AC-7)', () => {
 describe('POST /api/installations/:id/revalidate (AC-8)', () => {
   beforeAll(setupCryptoEnv);
 
-  it('stub validate passa → 200 + audit registrado', async () => {
+  it('validate passa → 200 + audit registrado (mock injected)', async () => {
     const storage = await freshRedisStorage();
     const accountId = await seedAccount(storage);
     const inst = await seedInstallation(storage, accountId);
 
-    const app = buildApp({ storage });
+    // F-S06: injeta mock validate pra não bater HTTP real durante test.
+    const app = buildApp({
+      storage,
+      validate: async () => ({
+        passed: true,
+        stage: 'full',
+        details: {
+          containerMatch: true,
+          expectedMatch: true,
+          datalayerMatch: true,
+          expectedContainerId: inst.gtm_container_id,
+        },
+      }),
+    });
 
     const res = await app.request(`/api/installations/${inst.id}/revalidate`, {
       method: 'POST',
@@ -249,7 +264,7 @@ describe('POST /api/installations/:id/revalidate (AC-8)', () => {
     expect(res.status).toBe(200);
     const body = await res.json() as { data: { passed: boolean; stage: string } };
     expect(body.data.passed).toBe(true);
-    expect(body.data.stage).toBe('TODO_F_S06'); // stub atual
+    expect(body.data.stage).toBe('full');
 
     const audit = await storage.listAudit(inst.id);
     expect(audit.some((a) => a.action === 'validation_passed')).toBe(true);
