@@ -1,10 +1,15 @@
 // Sidebar — Mentoria Tracking App
-// 6 items fixos do Tracking (sem personas/menus dinâmicos do ERP).
+// 7 items fixos do Tracking (sem personas/menus dinâmicos do ERP).
 // A11y: aria-current="page" na rota ativa, aria-label na aside.
+// F-S10 (2026-05-26): item "sites" exibe badge NEW (verde) até o usuário
+// visitar /sites pela primeira vez (sinalizador em localStorage).
 
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
 import { MENU_ITEMS } from '@/data/menu'
+
+const SITES_SEEN_KEY = 'sites-feature-seen-at'
 
 type Props = {
   activePath?: string
@@ -14,6 +19,31 @@ type Props = {
 }
 
 export function Sidebar({ activePath, onSelect, inDrawer = false }: Props) {
+  // Badge "NEW" no item Sites Conectados (F-S10 AC-5). Mostra até user visitar
+  // /sites pela primeira vez. Inicial false pra evitar mismatch em SSR/jsdom.
+  const [showSitesNewBadge, setShowSitesNewBadge] = useState(false)
+
+  useEffect(() => {
+    try {
+      const seen = window.localStorage.getItem(SITES_SEEN_KEY)
+      setShowSitesNewBadge(!seen)
+    } catch {
+      // localStorage indisponível (Safari privado) — não exibe badge.
+      setShowSitesNewBadge(false)
+    }
+  }, [])
+
+  // Quando user navega pra /sites, removemos o badge (marca como "visto").
+  useEffect(() => {
+    if (!activePath || !activePath.startsWith('/sites')) return
+    try {
+      window.localStorage.setItem(SITES_SEEN_KEY, new Date().toISOString())
+      setShowSitesNewBadge(false)
+    } catch {
+      // Sem persistência — UI degrada graciosamente.
+    }
+  }, [activePath])
+
   return (
     <aside
       aria-label="Navegação principal"
@@ -79,6 +109,14 @@ export function Sidebar({ activePath, onSelect, inDrawer = false }: Props) {
                   aria-label={`${item.badge} pendentes`}
                 >
                   {item.badge > 99 ? '99+' : item.badge}
+                </span>
+              )}
+              {item.id === 'sites' && showSitesNewBadge && item.badge === null && (
+                <span
+                  className="ml-auto h-5 px-2 rounded-full bg-brand-green text-brand-black text-caption font-semibold uppercase tracking-wider flex items-center justify-center"
+                  aria-label="Funcionalidade nova"
+                >
+                  Novo
                 </span>
               )}
             </button>
