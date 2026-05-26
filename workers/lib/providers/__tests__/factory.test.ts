@@ -5,8 +5,8 @@
  * @see docs/specs/F-S03-provider-interface-spec.md §8.1
  */
 
-import { describe, expect, it } from 'vitest';
-import { HostingerAdapter, getProvider } from '../index';
+import { describe, expect, it, vi } from 'vitest';
+import { HostingerAdapter, TokenInvalidError, getProvider } from '../index';
 import type { IHostingProvider, ProviderType } from '../index';
 
 describe('getProvider() factory', () => {
@@ -29,9 +29,23 @@ describe('getProvider() factory', () => {
     ).toThrow(/Unknown provider/);
   });
 
-  it('HostingerAdapter stub methods reject with /Not implemented/', async () => {
+  it('HostingerAdapter rejects invalid token with TokenInvalidError (F-S04 real impl)', async () => {
+    // F-S03 stub days: este assert validava `/Not implemented/`. F-S04 substituiu
+    // o stub por impl real (REST fetch). Comportamento agora: 401 upstream
+    // mapeia pra TokenInvalidError per ADR-0008 §3.8.
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      headers: new Headers(),
+      text: () => Promise.resolve(''),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
     const adapter = getProvider('hostinger', { token: 'fake-token' });
-    await expect(adapter.listSites()).rejects.toThrow(/Not implemented/);
+    await expect(adapter.listSites()).rejects.toBeInstanceOf(TokenInvalidError);
+
+    vi.unstubAllGlobals();
   });
 
   it('accepts optional wpAdminPassword in credentials', () => {
