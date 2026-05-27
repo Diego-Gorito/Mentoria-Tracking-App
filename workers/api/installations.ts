@@ -37,6 +37,11 @@ import {
   isBrandSlug,
   type BrandSlug,
 } from '../lib/constants';
+import {
+  resolveTenantGtmContainerId,
+  GtmContainerNotResolvedError,
+} from '../lib/gtmContainerResolver';
+import { supabaseAdmin } from './db';
 import { LockConflictError } from './errors';
 import { deployJob, type DeployJobDeps } from './deployJob';
 import { validate as runValidator, type ValidationResult } from '../lib/validator';
@@ -189,8 +194,31 @@ export function createInstallationsRouter(
     const account = await storage.getAccount(input.hosting_account_id as AccountId);
     assertTenantOwnership(account, ctx, 'hosting_account', input.hosting_account_id);
 
-    // Backend hardcoded lookup do gtm_container_id (R4 PRD mitigado).
-    const gtmContainerId = BRAND_GTM_MAP[input.brand_slug];
+    // F-S23 (Era 2): lookup dinâmico em core.tenant_containers + fallback Era 1.
+    // Backend NUNCA aceita container_id da UI (R4 PRD mitigado).
+    let gtmContainerId: string;
+    let containerSource: 'era1' | 'era2';
+    try {
+      const resolved = await resolveTenantGtmContainerId(
+        resolveTenantId(ctx),
+        input.brand_slug,
+        { supabase: supabaseAdmin },
+      );
+      gtmContainerId = resolved.gtm_container_public_id;
+      containerSource = resolved.source;
+    } catch (err) {
+      if (err instanceof GtmContainerNotResolvedError) {
+        throw new HttpError(
+          404,
+          'NO_GTM_CONTAINER',
+          'Tenant não tem container GTM provisionado. Acesse /integracoes/gtm pra provisionar.',
+        );
+      }
+      throw err;
+    }
+    console.log(
+      `[installations] container resolved tenant=${resolveTenantId(ctx)} src=${containerSource} gtm=${gtmContainerId}`,
+    );
 
     // F-S01 createInstallation já implementa idempotência por site_domain
     // (sha1 reserve via SET NX). Se já existe pra esse domain, retorna o existente.
