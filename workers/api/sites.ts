@@ -18,8 +18,8 @@ import { authMiddleware, getAuthCtx, type AuthContext } from './middleware';
 import { getStorage, type IGtmStorage } from '../lib/storage';
 import { sealDecrypt } from '../lib/storage/crypto';
 import { getProvider, type IHostingProvider, type Site } from '../lib/providers';
-import type { HostingAccount, TenantId } from '../lib/storage/types';
-import { MENTORIA_TENANT_ID } from '../lib/constants';
+import type { HostingAccount } from '../lib/storage/types';
+import { resolveTenantId } from './tenantGuard';
 
 // ---------- types ----------
 
@@ -65,10 +65,6 @@ export function __clearSitesCache(): void {
 }
 
 // ---------- helpers ----------
-
-function resolveTenantId(_ctx: AuthContext): TenantId {
-  return MENTORIA_TENANT_ID;
-}
 
 async function decryptToken(account: HostingAccount): Promise<string> {
   const pub = process.env.STORAGE_ENCRYPTION_PUBLIC_KEY;

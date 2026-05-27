@@ -21,12 +21,11 @@ import { z } from 'zod';
 
 import { authMiddleware, getAuthCtx, type AuthContext } from './middleware';
 import { getStorage, type IGtmStorage } from '../lib/storage';
-import type { AccountId, HostingAccount, TenantId } from '../lib/storage/types';
+import type { AccountId, HostingAccount } from '../lib/storage/types';
 import { sealEncrypt } from '../lib/storage/crypto';
 import { getProvider, type IHostingProvider } from '../lib/providers';
 import { TokenInvalidError } from '../lib/providers/errors';
-import { MENTORIA_TENANT_ID } from '../lib/constants';
-import { NotFoundError } from './errors';
+import { resolveTenantId, assertTenantOwnership } from './tenantGuard';
 
 // ---------- Zod schemas ----------
 
@@ -72,11 +71,6 @@ function publicAccountView(acc: HostingAccount): Omit<HostingAccount, 'token_enc
   void token_encrypted;
   void wp_admin_creds_encrypted;
   return rest;
-}
-
-/** Resolve tenant_id — single-tenant MVP usa const fixo (F-S14 troca pelo real). */
-function resolveTenantId(_ctx: AuthContext): TenantId {
-  return MENTORIA_TENANT_ID;
 }
 
 // ---------- factory ----------
@@ -152,9 +146,7 @@ export function createHostingAccountsRouter(deps: HostingAccountsDeps = {}): Hon
     const storage = getStorageInstance();
 
     const existing = await storage.getAccount(id);
-    if (!existing) {
-      throw new NotFoundError('hosting_account', id);
-    }
+    assertTenantOwnership(existing, ctx, 'hosting_account', id);
 
     // AC-3 step 2: deleteAccount NÃO toca audit keys (RedisGtmStorage já honra).
     await storage.deleteAccount(id);

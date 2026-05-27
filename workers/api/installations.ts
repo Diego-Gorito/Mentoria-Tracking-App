@@ -33,11 +33,10 @@ import type {
 import {
   BRAND_GTM_MAP,
   DEFAULT_PLUGIN_VERSION,
-  MENTORIA_TENANT_ID,
   isBrandSlug,
   type BrandSlug,
 } from '../lib/constants';
-import { LockConflictError, NotFoundError } from './errors';
+import { LockConflictError } from './errors';
 import { deployJob, type DeployJobDeps } from './deployJob';
 import { validate as runValidator } from '../lib/validator';
 import { appendAuditWithSanitization } from '../lib/audit';
@@ -48,6 +47,7 @@ import {
   type PopEventFn,
   type SseEvent,
 } from '../lib/sseBus';
+import { resolveTenantId, assertTenantOwnership } from './tenantGuard';
 
 // ---------- Zod schemas ----------
 
@@ -112,10 +112,6 @@ interface InstallationsDeps {
 
 // ---------- helpers ----------
 
-function resolveTenantId(_ctx: AuthContext): TenantId {
-  return MENTORIA_TENANT_ID;
-}
-
 async function buildProviderForAccount(
   account: HostingAccount,
   factory: (
@@ -147,7 +143,17 @@ export function createInstallationsRouter(
   const scheduleDeploy =
     deps.scheduleDeploy ??
     ((id: InstallationId, jobDeps: DeployJobDeps) => {
-      // setImmediate pra MVP — Onda 1.5 swap por BullMQ/Queue
+      // setImmediate pra MVP — Onda 1.5 swap por BullMQ/Queue.
+      //
+      // DEBT (Codex adversarial #3, 2026-05-26): worker assíncrono in-process
+      // significa que CRASH do container entre 202 (route response) e o
+      // pipeline finish PERDE o job sem audit trail. Mitigação atual:
+      //  - Lock TTL 180s impede 2º deploy concurrent no mesmo site
+      //  - Polling fallback no frontend (F-S11 useInstallTracking) detecta
+      //    status 'uploading' parado, UI mostra "Demorando…" pro Diego
+      //  - F-S15 runbook documentará como reset manual via Redis
+      // Fix real (Onda 1.5): BullMQ job persistido em Redis stream + worker
+      // lease renew + CAS em updateInstallation.
       setImmediate(() => {
         void deployJob(id, jobDeps);
       });
@@ -168,11 +174,9 @@ export function createInstallationsRouter(
 
     const storage = getStorageInstance();
 
-    // Verifica que a hosting_account_id pertence ao tenant (sanity check).
+    // Tenant guard: account precisa pertencer ao mesmo tenant do ctx (Codex #1).
     const account = await storage.getAccount(input.hosting_account_id as AccountId);
-    if (!account) {
-      throw new NotFoundError('hosting_account', input.hosting_account_id);
-    }
+    assertTenantOwnership(account, ctx, 'hosting_account', input.hosting_account_id);
 
     // Backend hardcoded lookup do gtm_container_id (R4 PRD mitigado).
     const gtmContainerId = BRAND_GTM_MAP[input.brand_slug];
@@ -216,22 +220,30 @@ export function createInstallationsRouter(
     const storage = getStorageInstance();
 
     const installation = await storage.getInstallation(id);
-    if (!installation) {
-      throw new NotFoundError('installation', id);
-    }
+    assertTenantOwnership(installation, ctx, 'installation', id);
 
-    // AC-6 step 1 — distributed lock (60s TTL).
-    const acquired = await storage.acquireLock(id, 60);
+    // AC-6 step 1 — distributed lock (180s TTL).
+    // SECURITY/RELIABILITY FIX 2026-05-26 (Codex adversarial #3): era 60s mas
+    // worst case deploy é ~90-127s (Hostinger upload 10-30s × 4 attempts +
+    // backoff [1s, 2s, 4s] do withRetry + validate). Lock expirando mid-flight
+    // permitia 2 deploys concorrentes no mesmo site (duplicate uploads,
+    // race em status updates). 180s cobre worst case com buffer.
+    // @todo Onda 1.5 — substituir setImmediate por BullMQ/queue durável.
+    // Job perdido em restart entre 202 e finish é débito MVP declarado
+    // (ADR-0008 + F-S05 story Tech Notes).
+    const acquired = await storage.acquireLock(id, 180);
     if (!acquired) {
       throw new LockConflictError();
     }
 
     // Resolve account agora (validação cedo se account sumiu).
     const account = await storage.getAccount(installation.hosting_account_id);
-    if (!account) {
-      // libera lock antes de throw — caller perdeu race com delete.
+    try {
+      assertTenantOwnership(account, ctx, 'hosting_account', installation.hosting_account_id);
+    } catch (err) {
+      // libera lock antes de propagar — caller perdeu race com delete OR cross-tenant.
       await storage.releaseLock(id);
-      throw new NotFoundError('hosting_account', installation.hosting_account_id);
+      throw err;
     }
 
     // AC-6 step 2 — dispara worker async via setImmediate (ou override em tests).
@@ -261,13 +273,12 @@ export function createInstallationsRouter(
 
   // ── GET /:id ──────────────────────────────────────────────────────────────
   router.get('/:id', async (c) => {
+    const ctx = getAuthCtx(c);
     const id = c.req.param('id') as InstallationId;
     const storage = getStorageInstance();
 
     const installation = await storage.getInstallation(id);
-    if (!installation) {
-      throw new NotFoundError('installation', id);
-    }
+    assertTenantOwnership(installation, ctx, 'installation', id);
 
     c.header('Cache-Control', 'no-store');
     return c.json({ data: installation });
@@ -279,15 +290,14 @@ export function createInstallationsRouter(
   // pra UI (SiteDetailPage + SiteAuditLogPage F-S10). Limit default 50 — MVP
   // single-tenant Diego ≤100/dia, paginação cursor-based fica Onda 1.5.
   router.get('/:id/audit-log', async (c) => {
+    const ctx = getAuthCtx(c);
     const id = c.req.param('id') as InstallationId;
     const limitRaw = c.req.query('limit');
     const limit = limitRaw ? Math.min(parseInt(limitRaw, 10) || 50, 200) : 50;
     const storage = getStorageInstance();
 
     const installation = await storage.getInstallation(id);
-    if (!installation) {
-      throw new NotFoundError('installation', id);
-    }
+    assertTenantOwnership(installation, ctx, 'installation', id);
 
     const entries = await storage.listAudit(id, limit);
     return c.json({ data: entries });
@@ -317,13 +327,12 @@ export function createInstallationsRouter(
   //  4. Abort (client disconnect): break loop e fecha — stream.aborted é
   //     setado por `streamSSE` quando ReadableStream cancela.
   router.get('/:id/events', async (c) => {
+    const ctx = getAuthCtx(c);
     const id = c.req.param('id') as InstallationId;
     const storage = getStorageInstance();
 
     const installation = await storage.getInstallation(id);
-    if (!installation) {
-      throw new NotFoundError('installation', id);
-    }
+    assertTenantOwnership(installation, ctx, 'installation', id);
 
     const redis = getRedisClient();
     const key = sseEventsKey(id);
@@ -377,9 +386,7 @@ export function createInstallationsRouter(
     const storage = getStorageInstance();
 
     const installation = await storage.getInstallation(id);
-    if (!installation) {
-      throw new NotFoundError('installation', id);
-    }
+    assertTenantOwnership(installation, ctx, 'installation', id);
 
     // AC-8 step 2 — chama validador 2-stage (F-S06).
     const validate: NonNullable<DeployJobDeps['validate']> = deps.validate ?? runValidator;
@@ -430,9 +437,7 @@ export function createInstallationsRouter(
     const storage = getStorageInstance();
 
     const installation = await storage.getInstallation(id);
-    if (!installation) {
-      throw new NotFoundError('installation', id);
-    }
+    assertTenantOwnership(installation, ctx, 'installation', id);
 
     // AC-9 step 1 — soft delete (status='uninstalled'); cleanup WP é Onda 1.5.
     await storage.updateInstallation(id, { status: 'uninstalled' });

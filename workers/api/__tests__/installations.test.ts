@@ -296,3 +296,116 @@ describe('DELETE /api/installations/:id (AC-9)', () => {
     expect(audit.some((a) => a.action === 'uninstalled')).toBe(true);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// Cross-tenant isolation — SECURITY FIX 2026-05-26 (Codex adversarial #1)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Assegura que assertTenantOwnership() não vaza objetos de outro tenant. Cada
+// teste seed account/installation com `tenant_id: 'tenant-A'`, então
+// autentica como `tenant-B` e valida que cada endpoint retorna 404 (não 403 —
+// não vaza existência).
+describe('Cross-tenant isolation (Codex #1)', () => {
+  beforeAll(setupCryptoEnv);
+
+  const TENANT_A = '11111111-1111-1111-1111-11111111aaaa';
+  const TENANT_B = '22222222-2222-2222-2222-22222222bbbb';
+
+  async function seedAccountForTenant(
+    storage: IGtmStorage,
+    tenantId: string,
+  ): Promise<AccountId> {
+    const pub = process.env.STORAGE_ENCRYPTION_PUBLIC_KEY!;
+    const tokenEncrypted = await sealEncrypt('mock-token', pub);
+    const acc = await storage.createAccount({
+      tenant_id: tenantId as never,
+      provider: 'hostinger',
+      account_label: `Test ${tenantId}`,
+      token_encrypted: tokenEncrypted,
+      status: 'active',
+    });
+    return acc.id;
+  }
+
+  function buildAppForTenant(storage: IGtmStorage, tenantId: string): Hono {
+    const app = new Hono();
+    app.use('*', requestIdMiddleware);
+    app.onError(errorHandler);
+    const router = createInstallationsRouter({
+      storage,
+      providerFactory: () => new MockProvider(),
+      authOverride: bypassAuth({
+        userId: '00000000-0000-0000-0000-00000000000a',
+        email: 'attacker@example.com',
+        tenantId,
+        products: ['tracking'],
+        currentProduct: 'tracking',
+        accessToken: 'test-jwt',
+      }),
+    });
+    app.route('/api/installations', router);
+    return app;
+  }
+
+  it('GET /:id de outro tenant → 404 (não vaza existência)', async () => {
+    const storage = await freshRedisStorage();
+    const accountId = await seedAccountForTenant(storage, TENANT_A);
+    const inst = await storage.createInstallation({
+      tenant_id: TENANT_A as never,
+      hosting_account_id: accountId,
+      site_domain: 'tenant-a.com',
+      brand_slug: 'zerohum',
+      gtm_container_id: 'GTM-WVWQVMP',
+      plugin_version: 'gtm4wp-1.18+bootstrap-v1',
+      status: 'installed',
+      attempt_count: 0,
+    });
+
+    // Autentica como tenant-B
+    const app = buildAppForTenant(storage, TENANT_B);
+    const res = await app.request(`/api/installations/${inst.id}`);
+    expect(res.status).toBe(404);
+    const body = await res.json() as { error: { code: string } };
+    expect(body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('POST /:id/deploy cross-tenant → 404', async () => {
+    const storage = await freshRedisStorage();
+    const accountId = await seedAccountForTenant(storage, TENANT_A);
+    const inst = await storage.createInstallation({
+      tenant_id: TENANT_A as never,
+      hosting_account_id: accountId,
+      site_domain: 'tenant-a.com',
+      brand_slug: 'zerohum',
+      gtm_container_id: 'GTM-WVWQVMP',
+      plugin_version: 'gtm4wp-1.18+bootstrap-v1',
+      status: 'draft',
+      attempt_count: 0,
+    });
+
+    const app = buildAppForTenant(storage, TENANT_B);
+    const res = await app.request(`/api/installations/${inst.id}/deploy`, {
+      method: 'POST',
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('POST / com hosting_account de outro tenant → 404', async () => {
+    const storage = await freshRedisStorage();
+    const accountIdA = await seedAccountForTenant(storage, TENANT_A);
+
+    const app = buildAppForTenant(storage, TENANT_B);
+    const res = await app.request('/api/installations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        hosting_account_id: accountIdA,
+        site_domain: 'evil.com',
+        brand_slug: 'zerohum',
+      }),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json() as { error: { code: string } };
+    expect(body.error.code).toBe('NOT_FOUND');
+  });
+});

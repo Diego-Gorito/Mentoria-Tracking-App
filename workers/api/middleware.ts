@@ -1,16 +1,27 @@
 // middleware.ts — auth middleware via Supabase Auth JWT
 // Fase 3 — ADR-0007 v1.2 (substitui verifyToken HS256 custom)
 //
-// Supabase Auth emite JWT assinado HMAC-SHA256 com o project JWT secret.
-// supabase.auth.getUser(token) valida via JWKS do projeto automaticamente.
+// SECURITY FIX 2026-05-26 (Codex adversarial review #2):
+// Antes lia tenant_id/products/current_product de `user.app_metadata` / `user.user_metadata`
+// via `supabase.auth.getUser(token)`. PROBLEMAS:
+//   (1) `user_metadata` é CLIENT-UPDATABLE — usuário malicioso pode forjar
+//       `tenant_id` via `PATCH /auth/v1/user { data: { tenant_id: 'outro' }}`
+//       e quebrar isolation cross-tenant.
+//   (2) Custom Access Token Hook (ADR-0085, `supabase/functions/custom-access-token`)
+//       emite claims TOP-LEVEL no JWT, NÃO em user_metadata. Leitura via getUser()
+//       não retorna esses campos.
 //
-// Claims injetadas no contexto Hono:
-//   userId     — auth.users.id (uuid)
-//   email      — auth.users.email
-//   tenantId   — claim customizada por ADR-0085 Custom Access Token Hook
-//   products   — array de produtos habilitados (ex: ['tracking'])
-//   currentProduct — produto ativo nesta sessao (ex: 'tracking')
-//   accessToken — JWT bruto (pra criar createUserClient com RLS)
+// FIX: usar `supabase.auth.getClaims(token)` que decode + verifica assinatura
+// (JWKS) e retorna claims top-level reais. Estes são assinados pelo Supabase
+// (não-forjáveis sem comprometer JWKS).
+//
+// Claims injetadas no contexto Hono (todas dos top-level JWT claims):
+//   userId     — claims.sub
+//   email      — claims.email
+//   tenantId   — claims.tenant_id (Custom Access Token Hook)
+//   products   — claims.products (Custom Access Token Hook)
+//   currentProduct — claims.current_product (Custom Access Token Hook)
+//   accessToken — JWT bruto (pra createUserClient com RLS downstream)
 
 import type { Context, Next } from 'hono'
 import { supabaseAdmin } from './db'
@@ -38,36 +49,35 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   }
 
   try {
-    const { data, error } = await supabaseAdmin.auth.getUser(token)
-    if (error || !data.user) {
+    // getClaims valida assinatura JWT (JWKS) e retorna top-level claims.
+    // Variantes do retorno:
+    //  - { data: { claims, header, signature }, error: null } → sucesso
+    //  - { data: null, error: AuthError } → falha de validação
+    //  - { data: null, error: null } → JWT não-assimétrico não verificado
+    //    (paranoid: tratamos como falha)
+    const { data, error } = await supabaseAdmin.auth.getClaims(token)
+    if (error || !data) {
       return c.json({ error: 'Token invalido ou expirado' }, 401)
     }
 
-    const user = data.user
-    const meta = user.user_metadata ?? {}
-    const appMeta = user.app_metadata ?? {}
+    const claims = data.claims as unknown as Record<string, unknown>
+    const userId = typeof claims.sub === 'string' ? claims.sub : null
+    if (!userId) {
+      return c.json({ error: 'Token sem sub claim' }, 401)
+    }
 
-    // Claims do Custom Access Token Hook (ADR-0085):
-    // tenant_id, products, current_product injetados pelo hook Deno.
-    // Fallback para user_metadata se hook ainda nao deployado (staging early).
-    const tenantId: string | null =
-      (appMeta.tenant_id as string | undefined) ??
-      (meta.tenant_id as string | undefined) ??
-      null
-
-    const products: string[] =
-      (appMeta.products as string[] | undefined) ??
-      (meta.products as string[] | undefined) ??
-      []
-
-    const currentProduct: string | null =
-      (appMeta.current_product as string | undefined) ??
-      (meta.current_product as string | undefined) ??
-      null
+    const email = typeof claims.email === 'string' ? claims.email : ''
+    const tenantId =
+      typeof claims.tenant_id === 'string' ? claims.tenant_id : null
+    const products = Array.isArray(claims.products)
+      ? (claims.products as string[])
+      : []
+    const currentProduct =
+      typeof claims.current_product === 'string' ? claims.current_product : null
 
     const ctx: AuthContext = {
-      userId: user.id,
-      email: user.email ?? '',
+      userId,
+      email,
       tenantId,
       products,
       currentProduct,
