@@ -28,6 +28,7 @@ import type {
   GtmInstallation,
   HostingAccount,
   InstallationId,
+  ISO8601,
   TenantId,
 } from '../lib/storage/types';
 import {
@@ -38,8 +39,18 @@ import {
 } from '../lib/constants';
 import { LockConflictError } from './errors';
 import { deployJob, type DeployJobDeps } from './deployJob';
-import { validate as runValidator } from '../lib/validator';
+import { validate as runValidator, type ValidationResult } from '../lib/validator';
 import { appendAuditWithSanitization } from '../lib/audit';
+
+/**
+ * Type standalone do validator F-S06 — usado pelo /revalidate.
+ * Antes era `DeployJobDeps['validate']` mas Codex #4 removeu validate
+ * do pipeline de deploy (deployJob → /revalidate).
+ */
+type ValidatorFn = (
+  domain: string,
+  expectedContainerId: string,
+) => Promise<ValidationResult>;
 import { getRedis } from '../lib/redis';
 import {
   defaultPopEvent,
@@ -85,8 +96,8 @@ interface InstallationsDeps {
    * Testes injetam versão sync (await) pra inspecionar resultado direto.
    */
   scheduleDeploy?: (id: InstallationId, deps: DeployJobDeps) => void | Promise<void>;
-  /** Override do validator (testes). */
-  validate?: DeployJobDeps['validate'];
+  /** Override do validator (testes /revalidate). */
+  validate?: ValidatorFn;
   /** Override do buildPlugin (testes). */
   buildPlugin?: DeployJobDeps['buildPlugin'];
   /**
@@ -223,11 +234,17 @@ export function createInstallationsRouter(
     assertTenantOwnership(installation, ctx, 'installation', id);
 
     // AC-6 step 1 — distributed lock (180s TTL).
-    // SECURITY/RELIABILITY FIX 2026-05-26 (Codex adversarial #3): era 60s mas
-    // worst case deploy é ~90-127s (Hostinger upload 10-30s × 4 attempts +
-    // backoff [1s, 2s, 4s] do withRetry + validate). Lock expirando mid-flight
-    // permitia 2 deploys concorrentes no mesmo site (duplicate uploads,
-    // race em status updates). 180s cobre worst case com buffer.
+    //
+    // Codex adversarial #3 (2026-05-26): subiu de 60s pra 180s pra cobrir
+    // upload + validate + retries.
+    //
+    // Codex adversarial #4 (2026-05-27): deploy não roda mais validate
+    // (movido pra /revalidate), então worst case caiu pra ~157s:
+    //   3 attempts × 50s (AbortSignal.timeout, HostingerAdapter) +
+    //   backoff [1s, 2s, 4s] = 157s ≤ 180s lock.
+    // Mantido 180s pra ter folga + cobrir buildPlugin I/O (~1-2s) +
+    // audit append serialization (sync Redis).
+    //
     // @todo Onda 1.5 — substituir setImmediate por BullMQ/queue durável.
     // Job perdido em restart entre 202 e finish é débito MVP declarado
     // (ADR-0008 + F-S05 story Tech Notes).
@@ -248,11 +265,11 @@ export function createInstallationsRouter(
 
     // AC-6 step 2 — dispara worker async via setImmediate (ou override em tests).
     // F-S12 AC-2: passa redisClient pro worker publicar SSE events.
+    // Codex #4: validate removido do pipeline — só rola em /revalidate.
     const jobDeps: DeployJobDeps = {
       storage,
       getProvider: async (_inst) => buildProviderForAccount(account, getProviderFn),
       buildPlugin: deps.buildPlugin,
-      validate: deps.validate,
       redisClient: deps.redisClient ?? getRedisClient(),
     };
 
@@ -367,9 +384,17 @@ export function createInstallationsRouter(
         await stream.writeSSE({ data: payload });
 
         // Steps terminais encerram o stream (F-S12 AC-3 step 4).
+        // `pending_activation` (Codex #4 fix) é terminal do deploy MVP: plugin
+        // foi subido, aguarda ativação manual no wp-admin + revalidate.
+        // `installed`/`failed` legados (futuramente podem voltar quando F-S05+
+        // implementar activation HTTP automática, ADR-0008 §3.4).
         try {
           const evt = JSON.parse(payload) as Partial<SseEvent>;
-          if (evt.step === 'installed' || evt.step === 'failed') {
+          if (
+            evt.step === 'installed' ||
+            evt.step === 'failed' ||
+            evt.step === 'pending_activation'
+          ) {
             break;
           }
         } catch {
@@ -380,6 +405,18 @@ export function createInstallationsRouter(
   });
 
   // ── POST /:id/revalidate ──────────────────────────────────────────────────
+  //
+  // Codex adversarial review #4 fix (2026-05-27): este endpoint agora é o
+  // ÚNICO ponto que roda o validator F-S06. Cobre 2 cenários:
+  //   1. Post-ativação: install em `uploaded_pending_activation` (deploy ok,
+  //      user ativou plugin no wp-admin) → roda validate → `installed | failed`
+  //      + `installed_at` se passou.
+  //   2. Drift check: install em `installed` → re-roda validate → mantém
+  //      `installed` (drift implícito marcado via last_validation_result.passed=false
+  //      quando algo mudou no site).
+  //
+  // Não bloqueia revalidate em outros status (draft, uploading, etc.) por
+  // simplicidade — caller pode chamar a qualquer momento, validator é idempotente.
   router.post('/:id/revalidate', async (c) => {
     const ctx = getAuthCtx(c);
     const id = c.req.param('id') as InstallationId;
@@ -389,7 +426,7 @@ export function createInstallationsRouter(
     assertTenantOwnership(installation, ctx, 'installation', id);
 
     // AC-8 step 2 — chama validador 2-stage (F-S06).
-    const validate: NonNullable<DeployJobDeps['validate']> = deps.validate ?? runValidator;
+    const validate: ValidatorFn = deps.validate ?? runValidator;
 
     const result = await validate(installation.site_domain, installation.gtm_container_id);
 
@@ -397,6 +434,15 @@ export function createInstallationsRouter(
     // lockado) não tem — usa 'failed' com last_validation_result.passed=false
     // marcando drift implicitamente.
     const newStatus: GtmInstallation['status'] = result.passed ? 'installed' : 'failed';
+
+    // Se transição é uploaded_pending_activation → installed, grava installed_at
+    // (primeira vez que o site valida). Subsequentes revalidates mantêm o ts
+    // original. Se já estava `installed`, não mexe (drift check pode reaprovar).
+    const wasFirstInstall =
+      installation.status === 'uploaded_pending_activation' && result.passed;
+    const installedAt = wasFirstInstall
+      ? (new Date().toISOString() as ISO8601)
+      : undefined;
 
     await storage.updateInstallation(id, {
       last_validation_at: new Date().toISOString() as GtmInstallation['last_validation_at'],
@@ -408,6 +454,7 @@ export function createInstallationsRouter(
           | undefined,
       },
       status: newStatus,
+      ...(installedAt ? { installed_at: installedAt } : {}),
     });
 
     await appendAuditWithSanitization(storage, {

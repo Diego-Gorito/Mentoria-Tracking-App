@@ -31,6 +31,12 @@ type Props = {
   onViewSiteDetails?: (site: EnrichedSite) => void
   /** Disparado quando user clica "Instalar tracking" em um card. */
   onInstallSite?: (site: EnrichedSite, brand: BrandSlug) => void
+  /**
+   * Disparado quando user clica "Já ativei, validar agora" (status
+   * uploaded_pending_activation) OU "Revalidar" (status installed) — Codex #4.
+   * Container chama POST /api/installations/:id/revalidate.
+   */
+  onRevalidateSite?: (site: EnrichedSite) => void
 }
 
 function SiteCardSkeleton() {
@@ -50,7 +56,12 @@ function SiteCardSkeleton() {
   )
 }
 
-export function SitesListPage({ onNavigate, onViewSiteDetails, onInstallSite }: Props) {
+export function SitesListPage({
+  onNavigate,
+  onViewSiteDetails,
+  onInstallSite,
+  onRevalidateSite,
+}: Props) {
   const { account, isConnected } = useHostingerAccount()
   const { sites, isLoading, error, refresh } = useSites()
 
@@ -192,6 +203,7 @@ export function SitesListPage({ onNavigate, onViewSiteDetails, onInstallSite }: 
                 <SiteCard
                   site={site}
                   onInstall={onInstallSite}
+                  onRevalidate={onRevalidateSite}
                   onViewDetails={onViewSiteDetails}
                 />
               </li>

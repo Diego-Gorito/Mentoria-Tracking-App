@@ -22,7 +22,8 @@ import { Integrations } from '@/routes/settings/Integrations'
 import { LeadsList } from '@/routes/leads/LeadsList'
 import { LeadDetail } from '@/routes/leads/LeadDetail'
 // Sites routes (F-S10) — auto-provisioner GTM Hostinger
-import { SitesListPage } from '@/routes/sites/SitesListPage'
+// Container wraps SitesListPage com install flow real (Codex #4 fix 2026-05-27).
+import { SitesListPageContainer } from '@/routes/sites/SitesListPageContainer'
 import { ConnectHostingerPage } from '@/routes/sites/ConnectHostingerPage'
 import { SiteDetailPage } from '@/routes/sites/SiteDetailPage'
 import { SiteAuditLogPage } from '@/routes/sites/SiteAuditLogPage'
@@ -291,7 +292,7 @@ export function App() {
                   'login' se !isAuthenticated, então 'sites' só renderiza
                   com sessão válida (AC-7). */}
               {route === 'sites' && sitesState.subpage === 'list' && (
-                <SitesListPage
+                <SitesListPageContainer
                   onNavigate={navigate}
                   onViewSiteDetails={(site) => {
                     const id = site.installation_id ?? site.domain

@@ -4,7 +4,7 @@
 // A11y: <article aria-labelledby="...-domain">, status com aria-label textual (UX-009).
 
 import { useMemo, type ReactNode } from 'react'
-import { Globe, Warning, Prohibit, DotsThree } from '@phosphor-icons/react'
+import { Globe, Warning, Prohibit, DotsThree, Clock } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -72,6 +72,15 @@ function badgeFor(status: SiteStatus | undefined, isWordPress: boolean): BadgeKi
         ariaLabel: 'Status: instalando',
         icon: null,
       }
+    case 'uploaded_pending_activation':
+      // Codex #4 (2026-05-27): estado terminal do deploy MVP. Plugin no
+      // servidor, aguarda user ativar no wp-admin antes do validator F-S06.
+      return {
+        status: 'warning',
+        label: 'Aguardando ativação',
+        ariaLabel: 'Status: aguardando ativação no wp-admin',
+        icon: <Clock size={14} weight="bold" aria-hidden="true" />,
+      }
     case 'not_installed':
     default:
       return {
@@ -118,6 +127,7 @@ export function SiteCard({
   const isInstalled = status === 'installed' || status === 'drift_detected'
   const isInstalling = status === 'draft'
   const isFailed = status === 'failed'
+  const isPendingActivation = status === 'uploaded_pending_activation'
   const isUnsupported = !site.is_wordpress
   const lastInstall = formatLastInstall(site.last_install_at)
 
@@ -189,7 +199,7 @@ export function SiteCard({
         {!isUnsupported && (
           <BrandSelect
             value={site.brand_slug}
-            disabled={isInstalled || isInstalling}
+            disabled={isInstalled || isInstalling || isPendingActivation}
             onChange={(slug) => onBrandChange?.(site, slug)}
             label={`Brand do site ${site.domain}`}
             className="w-full sm:w-auto sm:min-w-[200px]"
@@ -208,6 +218,28 @@ export function SiteCard({
             >
               Instalar tracking
             </Button>
+          )}
+
+          {/* Codex #4 (2026-05-27): estado pending_activation — plugin no
+              servidor mas user precisa ativar no wp-admin antes do validator
+              F-S06 confirmar. CTA primária "Já ativei, validar agora" dispara
+              POST /:id/revalidate via onRevalidate. */}
+          {!isUnsupported && isPendingActivation && (
+            <>
+              <p className="text-caption text-fg-on-light-muted text-right sm:max-w-[260px]">
+                Plugin enviado. Ative em <span className="font-mono">wp-admin → Plugins</span> e clique abaixo.
+              </p>
+              {onRevalidate && (
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => onRevalidate(site)}
+                  className="min-h-[44px]"
+                >
+                  Já ativei, validar agora
+                </Button>
+              )}
+            </>
           )}
 
           {!isUnsupported && (isInstalled || isFailed) && onViewDetails && (
@@ -259,6 +291,17 @@ export function SiteCard({
             <p className="text-caption text-fg-on-light-muted text-right">
               Esse provedor exige WordPress.
             </p>
+          )}
+
+          {!isUnsupported && isPendingActivation && onViewDetails && (
+            <Button
+              variant="ghost"
+              size="md"
+              onClick={() => onViewDetails(site)}
+              className="min-h-[44px]"
+            >
+              Ver detalhes
+            </Button>
           )}
 
           {!isUnsupported && onViewDetails && status === 'not_installed' && (

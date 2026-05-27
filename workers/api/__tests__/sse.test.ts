@@ -47,6 +47,12 @@ import type {
   InstallationId,
 } from '../../lib/storage/types';
 import type { DeployJobDeps } from '../deployJob';
+import type { ValidationResult } from '../../lib/validator';
+
+type ValidatorFn = (
+  domain: string,
+  expectedContainerId: string,
+) => Promise<ValidationResult>;
 import type { PopEventFn, SseEvent } from '../../lib/sseBus';
 import { publishEvent, sseEventsKey } from '../../lib/sseBus';
 import { deployJob } from '../deployJob';
@@ -145,7 +151,7 @@ interface AppOpts {
   popEvent?: PopEventFn;
   heartbeatMs?: number;
   scheduleDeploy?: (id: InstallationId, deps: DeployJobDeps) => void | Promise<void>;
-  validate?: DeployJobDeps['validate'];
+  validate?: ValidatorFn;
 }
 
 function buildApp(opts: AppOpts): Hono {
@@ -335,10 +341,14 @@ describe('GET /api/installations/:id/events (F-S12 AC-1+AC-3+AC-4)', () => {
 // Worker publish (AC-2)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('deployJob publica events em Redis LIST (F-S12 AC-2)', () => {
+describe('deployJob publica events em Redis LIST (F-S12 AC-2 + Codex #4)', () => {
   beforeAll(setupCryptoEnv);
 
-  it('happy path: publica upload_started → upload_complete → installed em ordem', async () => {
+  it('happy path: publica upload_started → upload_complete → pending_activation em ordem', async () => {
+    // Codex adversarial #4 fix (2026-05-27): deployJob não roda mais
+    // validate inline — termina em `uploaded_pending_activation`. UI dispara
+    // `/revalidate` após user ativar plugin no wp-admin.
+    //
     // Reuse o mesmo RedisMock client em storage + redisClient pra evitar
     // bleed entre instâncias (ioredis-mock v6+ compartilha state por host:port,
     // mas isso é frágil; injetar o mesmo client é mais robusto).
@@ -355,16 +365,6 @@ describe('deployJob publica events em Redis LIST (F-S12 AC-2)', () => {
     await deployJob(inst.id, {
       storage,
       getProvider: async () => new MockProvider({ ownedDomains: ['zerohum.com.br'] }),
-      validate: async () => ({
-        passed: true,
-        stage: 'full',
-        details: {
-          containerMatch: true,
-          expectedMatch: true,
-          datalayerMatch: true,
-          expectedContainerId: inst.gtm_container_id,
-        },
-      }),
       redisClient: redis,
     });
 
@@ -375,24 +375,27 @@ describe('deployJob publica events em Redis LIST (F-S12 AC-2)', () => {
     const events = [...raw].reverse().map((s) => JSON.parse(s) as SseEvent);
 
     const steps = events.map((e) => e.step);
-    // Ordem FIFO esperada do happy path.
+    // Ordem FIFO esperada do happy path MVP (sem activation/validate inline).
     expect(steps).toEqual([
       'upload_started',
       'upload_complete',
-      'activation_started',
-      'validation_started',
-      'validation_passed',
-      'installed',
+      'pending_activation',
     ]);
 
-    // upload_complete e validation_passed têm timing_ms.
+    // upload_complete tem timing_ms (upload duration).
     const uploadComplete = events.find((e) => e.step === 'upload_complete')!;
     expect(typeof uploadComplete.timing_ms).toBe('number');
     expect(uploadComplete.status).toBe('done');
 
-    const installed = events.find((e) => e.step === 'installed')!;
-    expect(installed.status).toBe('done');
-    expect(typeof installed.timing_ms).toBe('number');
+    // pending_activation é terminal — tem timing_ms total (tStart→agora).
+    const pending = events.find((e) => e.step === 'pending_activation')!;
+    expect(pending.status).toBe('done');
+    expect(typeof pending.timing_ms).toBe('number');
+
+    // Installation transitou pra uploaded_pending_activation no storage.
+    const after = await storage.getInstallation(inst.id);
+    expect(after?.status).toBe('uploaded_pending_activation');
+    expect(after?.upload_dir_name).toBeDefined();
 
     // TTL setado (F-S12 AC-2: EXPIRE 300s).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -401,7 +404,10 @@ describe('deployJob publica events em Redis LIST (F-S12 AC-2)', () => {
     expect(ttl).toBeLessThanOrEqual(300);
   });
 
-  it('falha no validate publica validation_failed + failed terminal', async () => {
+  it('upload provider falha → upload_failed + failed terminal', async () => {
+    // Cenário: provider.deployPlugin retorna status=failed (ex: 5xx Hostinger
+    // após retries esgotados). deployJob captura, marca status=failed +
+    // publica upload_failed + failed terminal.
     const { storage, client, flush } = makeRedisStorage();
     await flush();
     const redis = client as RedisClient;
@@ -413,17 +419,15 @@ describe('deployJob publica events em Redis LIST (F-S12 AC-2)', () => {
 
     await deployJob(inst.id, {
       storage,
-      getProvider: async () => new MockProvider({ ownedDomains: ['zerohum.com.br'] }),
-      validate: async () => ({
-        passed: false,
-        stage: 'head',
-        details: {
-          containerMatch: false,
-          expectedMatch: false,
-          datalayerMatch: false,
-          expectedContainerId: inst.gtm_container_id,
-        },
-      }),
+      getProvider: async () =>
+        new MockProvider({
+          ownedDomains: ['zerohum.com.br'],
+          deployResult: {
+            status: 'failed',
+            summary: { successful: 0, failed: 12 },
+            errorSummary: 'mock upload failure',
+          },
+        }),
       redisClient: redis,
     });
 
@@ -432,9 +436,13 @@ describe('deployJob publica events em Redis LIST (F-S12 AC-2)', () => {
     const events = [...raw].reverse().map((s) => JSON.parse(s) as SseEvent);
     const steps = events.map((e) => e.step);
 
-    // validation_failed + terminal `failed` presentes em ordem.
-    expect(steps).toContain('validation_failed');
+    // upload_failed + terminal `failed` presentes em ordem.
+    expect(steps).toContain('upload_failed');
     expect(steps[steps.length - 1]).toBe('failed');
+
+    // Status final no storage = failed (não pending_activation).
+    const after = await storage.getInstallation(inst.id);
+    expect(after?.status).toBe('failed');
   });
 
   it('worker SEM redisClient: pipeline funciona normalmente (no-op publish)', async () => {
@@ -449,22 +457,13 @@ describe('deployJob publica events em Redis LIST (F-S12 AC-2)', () => {
       deployJob(inst.id, {
         storage,
         getProvider: async () => new MockProvider({ ownedDomains: ['zerohum.com.br'] }),
-        validate: async () => ({
-          passed: true,
-          stage: 'full',
-          details: {
-            containerMatch: true,
-            expectedMatch: true,
-            datalayerMatch: true,
-            expectedContainerId: inst.gtm_container_id,
-          },
-        }),
       }),
     ).resolves.toBeUndefined();
 
-    // Installation transitou pra `installed` mesmo sem Redis pub.
+    // Codex #4 fix: status terminal do deploy é uploaded_pending_activation
+    // (validate corre só em /revalidate). UI mostra CTA "Ative no wp-admin".
     const after = await storage.getInstallation(inst.id);
-    expect(after?.status).toBe('installed');
+    expect(after?.status).toBe('uploaded_pending_activation');
   });
 
   it('publishEvent falha → swallow + log (não bloqueia pipeline)', async () => {
@@ -491,22 +490,12 @@ describe('deployJob publica events em Redis LIST (F-S12 AC-2)', () => {
     await deployJob(inst.id, {
       storage,
       getProvider: async () => new MockProvider({ ownedDomains: ['zerohum.com.br'] }),
-      validate: async () => ({
-        passed: true,
-        stage: 'full',
-        details: {
-          containerMatch: true,
-          expectedMatch: true,
-          datalayerMatch: true,
-          expectedContainerId: inst.gtm_container_id,
-        },
-      }),
       redisClient: brokenRedis,
     });
 
-    // Apesar dos publishes falharem, status final installed gravou no storage.
+    // Apesar dos publishes falharem, status terminal gravou no storage.
     const after = await storage.getInstallation(inst.id);
-    expect(after?.status).toBe('installed');
+    expect(after?.status).toBe('uploaded_pending_activation');
 
     // Log de erro emitido pelo publishEvent.
     expect(errSpy).toHaveBeenCalled();

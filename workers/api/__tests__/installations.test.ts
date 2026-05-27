@@ -35,6 +35,12 @@ import type {
   InstallationId,
 } from '../../lib/storage/types';
 import type { DeployJobDeps } from '../deployJob';
+import type { ValidationResult } from '../../lib/validator';
+
+type ValidatorFn = (
+  domain: string,
+  expectedContainerId: string,
+) => Promise<ValidationResult>;
 
 async function seedAccount(storage: IGtmStorage): Promise<AccountId> {
   const pub = process.env.STORAGE_ENCRYPTION_PUBLIC_KEY!;
@@ -73,7 +79,7 @@ function buildApp(opts: {
     creds: { token: string; wpAdminPassword?: string },
   ) => IHostingProvider;
   scheduleDeploy?: (id: InstallationId, deps: DeployJobDeps) => void | Promise<void>;
-  validate?: DeployJobDeps['validate'];
+  validate?: ValidatorFn;
 }): Hono {
   const app = new Hono();
   app.use('*', requestIdMiddleware);
@@ -268,6 +274,80 @@ describe('POST /api/installations/:id/revalidate (AC-8)', () => {
 
     const audit = await storage.listAudit(inst.id);
     expect(audit.some((a) => a.action === 'validation_passed')).toBe(true);
+  });
+
+  // Codex adversarial #4 fix (2026-05-27): /revalidate cobre transição
+  // uploaded_pending_activation → installed (primeira ativação pós-deploy).
+  // installed_at é gravado nessa transição (não em revalidates subsequentes).
+  it('uploaded_pending_activation + validate passa → installed + installed_at gravado', async () => {
+    const storage = await freshRedisStorage();
+    const accountId = await seedAccount(storage);
+    const inst = await seedInstallation(storage, accountId);
+
+    // Pre-condição: install ficou em uploaded_pending_activation após deploy
+    // (simula estado real pós-deployJob com Codex #4 fix).
+    await storage.updateInstallation(inst.id, {
+      status: 'uploaded_pending_activation',
+      upload_dir_name: 'gtm4wp-zerohum-abc123',
+    });
+
+    const app = buildApp({
+      storage,
+      validate: async () => ({
+        passed: true,
+        stage: 'full',
+        details: {
+          containerMatch: true,
+          expectedMatch: true,
+          datalayerMatch: true,
+          expectedContainerId: inst.gtm_container_id,
+        },
+      }),
+    });
+
+    const res = await app.request(`/api/installations/${inst.id}/revalidate`, {
+      method: 'POST',
+    });
+    expect(res.status).toBe(200);
+
+    const after = await storage.getInstallation(inst.id);
+    expect(after?.status).toBe('installed');
+    expect(after?.installed_at).toBeDefined();
+    // installed_at deve ser ISO8601 recente (< 5s).
+    expect(Date.now() - new Date(after!.installed_at!).getTime()).toBeLessThan(5000);
+  });
+
+  it('uploaded_pending_activation + validate falha → failed (sem installed_at)', async () => {
+    const storage = await freshRedisStorage();
+    const accountId = await seedAccount(storage);
+    const inst = await seedInstallation(storage, accountId);
+
+    await storage.updateInstallation(inst.id, {
+      status: 'uploaded_pending_activation',
+    });
+
+    const app = buildApp({
+      storage,
+      validate: async () => ({
+        passed: false,
+        stage: 'head',
+        details: {
+          containerMatch: false,
+          expectedMatch: false,
+          datalayerMatch: false,
+          expectedContainerId: inst.gtm_container_id,
+        },
+      }),
+    });
+
+    const res = await app.request(`/api/installations/${inst.id}/revalidate`, {
+      method: 'POST',
+    });
+    expect(res.status).toBe(200);
+
+    const after = await storage.getInstallation(inst.id);
+    expect(after?.status).toBe('failed');
+    expect(after?.installed_at).toBeUndefined();
   });
 });
 

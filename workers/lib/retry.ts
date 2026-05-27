@@ -80,6 +80,17 @@ export function defaultIsRetryable(err: unknown): boolean {
     return true;
   }
 
+  // AbortSignal.timeout (Codex #4): undici throws DOMException name='TimeoutError'
+  // (Node 20+) ou name='AbortError'. Trata como network transient — retentar
+  // pode pegar conexão melhor. Caller signal (não-timeout) também cai aqui
+  // mas o caller controla quando cancelar; retry só lhe daria nova chance.
+  if (
+    err instanceof Error &&
+    (err.name === 'TimeoutError' || err.name === 'AbortError')
+  ) {
+    return true;
+  }
+
   return false;
 }
 

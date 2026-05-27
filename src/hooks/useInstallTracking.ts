@@ -42,9 +42,18 @@ interface SseEventPayload {
   error?: string;
 }
 
-const TERMINAL_STEPS = new Set(['installed', 'failed']);
+// Codex adversarial #4 fix (2026-05-27): `pending_activation` virou terminal
+// step do deploy MVP — plugin foi subido, aguarda ativação manual no wp-admin.
+// UI fecha modal de progresso, mostra CTA "Revalidar agora" que dispara
+// `POST /api/installations/:id/revalidate` (validator F-S06).
+const TERMINAL_STEPS = new Set(['installed', 'failed', 'pending_activation']);
 
-export type InstallTrackingStatus = 'idle' | 'installing' | 'installed' | 'failed';
+export type InstallTrackingStatus =
+  | 'idle'
+  | 'installing'
+  | 'installed'
+  | 'failed'
+  | 'pending_activation';
 
 export interface ProgressState {
   step: string;
@@ -139,7 +148,7 @@ export function useInstallTracking(siteId: string): UseInstallTrackingResult {
             const fresh = response.data;
             setInstall(fresh);
 
-            // Map status backend (8 buckets) → UI status (4 buckets) + progress step.
+            // Map status backend (8 buckets) → UI status (5 buckets) + progress step.
             if (fresh.status === 'installed') {
               setStatus('installed');
               setProgress({ step: 'validated', status: 'done' });
@@ -164,8 +173,13 @@ export function useInstallTracking(siteId: string): UseInstallTrackingResult {
                 });
               }
               stopPolling();
+            } else if (fresh.status === 'uploaded_pending_activation') {
+              // Codex #4: terminal do deploy MVP — aguarda ativação manual.
+              setStatus('pending_activation');
+              setProgress({ step: 'pending_activation', status: 'done' });
+              stopPolling();
             } else {
-              // uploading / activating / validating / draft / uploaded_pending_activation
+              // uploading / activating / validating / draft
               setStatus('installing');
               setProgress({ step: fresh.status, status: 'in_progress' });
             }
@@ -212,6 +226,7 @@ export function useInstallTracking(siteId: string): UseInstallTrackingResult {
         if (TERMINAL_STEPS.has(evt.step)) {
           if (evt.step === 'installed') setStatus('installed');
           else if (evt.step === 'failed') setStatus('failed');
+          else if (evt.step === 'pending_activation') setStatus('pending_activation');
           stopEventSource();
           // Polling pós-SSE close pega install state final (last_validation_result).
           startPolling(installationId);

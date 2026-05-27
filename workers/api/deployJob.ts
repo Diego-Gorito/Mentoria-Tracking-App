@@ -3,19 +3,26 @@
  *
  * Source-of-truth: `docs/stories/F-S05.md` AC-6 (pipeline state machine).
  *
- * Pipeline (per AC-6 step 3):
- *   draft → uploading → uploaded_pending_activation → activating → installed
- *                                                                ↘ failed
+ * Pipeline ATUAL (Codex adversarial #4 fix, 2026-05-27):
+ *   draft → uploading → uploaded_pending_activation [TERMINAL deploy]
+ *
+ * Depois da ativação manual no wp-admin pelo usuário, o frontend chama
+ * `POST /api/installations/:id/revalidate` que roda o validator F-S06 e
+ * transiciona pra `installed | failed` baseado no resultado.
+ *
+ * RATIONALE: o plugin gtm4wp-mentoria só configura GTM no
+ * `register_activation_hook` (PHP). Validar HEAD/GET ANTES da ativação
+ * marca install válido como `failed` (Codex review #4 finding [high]).
+ * Fix: separar `deploy` (upload + idempotência) de `activate+validate`
+ * (revalidate endpoint). Activation HTTP automática (fallback C ADR-0008
+ * §3.4 — login wp-admin com app password) fica Sprint 4.
  *
  * Steps:
  *   1. mark uploading + attempt_count++
- *   2. buildPlugin(installation) (F-S13 stub — TODO)
- *   3. provider.deployPlugin(...) (F-S04)
- *   4. mark uploaded_pending_activation + upload_dir_name
- *   5. activation fallback D — TODO (ADR-0008 §3.4) — apenas marca explicitamente
- *   6. validate(domain, expectedContainerId) (F-S06 real)
- *   7. mark installed | failed + last_validation_result
- *   8. releaseLock(id)
+ *   2. buildPlugin(installation) (F-S13)
+ *   3. provider.deployPlugin(...) (F-S04) com AbortSignal 50s/attempt
+ *   4. mark uploaded_pending_activation + upload_dir_name + emit terminal
+ *   5. releaseLock(id) no finally
  *
  * Erros capturados → updateInstallation status='failed' + appendAudit
  * 'upload_failed' + release lock. Worker NUNCA throw (executado via
@@ -31,7 +38,6 @@ import type { IGtmStorage } from '../lib/storage';
 import type { GtmInstallation, ISO8601, InstallationId } from '../lib/storage/types';
 import type { IHostingProvider } from '../lib/providers';
 import { TokenInvalidError, RateLimitError, DomainNotOwnedError } from '../lib/providers/errors';
-import { validate as runValidator, type ValidationResult } from '../lib/validator';
 import { appendAuditWithSanitization } from '../lib/audit';
 import { publishEvent, type SseEvent } from '../lib/sseBus';
 import {
@@ -54,14 +60,6 @@ export interface DeployJobDeps {
    */
   buildPlugin?: (input: BuildPluginInput) => Promise<BuildPluginResult>;
   /**
-   * Validador pós-deploy 2-stage (HEAD+GET). Default usa `validate` de
-   * `workers/lib/validator.ts` (F-S06). Tests podem injetar mock.
-   */
-  validate?: (
-    domain: string,
-    expectedContainerId: string,
-  ) => Promise<ValidationResult>;
-  /**
    * Client Redis usado pra publicar SSE events (F-S12 AC-2).
    *
    * Quando ausente, publish é no-op (não bloqueia o pipeline e mantém compat
@@ -83,9 +81,8 @@ export async function deployJob(
   installationId: InstallationId,
   deps: DeployJobDeps,
 ): Promise<void> {
-  const { storage, getProvider, buildPlugin, validate, redisClient } = deps;
+  const { storage, getProvider, buildPlugin, redisClient } = deps;
   const buildFn = buildPlugin ?? runBuildPlugin;
-  const validateFn = validate ?? runValidator;
 
   /**
    * Helper local — publica em Redis LIST `gtm:events:<id>` (F-S12 AC-2).
@@ -154,7 +151,16 @@ export async function deployJob(
       );
     }
 
-    // Step 4 — uploaded_pending_activation
+    // Step 4 — uploaded_pending_activation [TERMINAL pra deploy]
+    //
+    // Codex adversarial review #4 (2026-05-27): antes este job continuava
+    // pra `activating` + `validate` + `installed|failed`, mas o plugin
+    // gtm4wp-mentoria SÓ configura GTM no `register_activation_hook` (PHP),
+    // o que exige ativação manual no wp-admin OU fallback C (HTTP login,
+    // ADR-0008 §3.4 — Sprint 4). Validar HEAD/GET antes da ativação marcava
+    // install válido como `failed`. Pipeline agora termina aqui; frontend
+    // mostra CTA "Ative o plugin no wp-admin → Revalidar" que dispara
+    // `POST /api/installations/:id/revalidate` (F-S06 validator).
     installation = await storage.updateInstallation(installationId, {
       status: 'uploaded_pending_activation',
       upload_dir_name: deployResult.uploadDirName,
@@ -177,68 +183,19 @@ export async function deployJob(
       actor_source: 'tracking-api',
     });
 
-    // Step 5 — activation fallback D (TODO ADR-0008 §3.4)
-    // MVP: marca activating mas não tenta ativação automática — UI mostra fallback D.
-    // @todo F-S05+ — implementar fallback C (HTTP wp-admin com WP app password) quando creds presentes.
-    installation = await storage.updateInstallation(installationId, {
-      status: 'activating',
-    });
-
-    await emit({ step: 'activation_started', status: 'in_progress' });
-
-    // Step 6 — validate (F-S06 real, 2-stage HEAD+GET)
-    await emit({ step: 'validation_started', status: 'in_progress' });
-    const tValidate = Date.now();
-    const validation = await validateFn(
-      installation.site_domain,
-      installation.gtm_container_id,
-    );
-
-    // Step 7 — installed | failed
-    const finalStatus: GtmInstallation['status'] = validation.passed ? 'installed' : 'failed';
-    const installedAt: ISO8601 | undefined = validation.passed ? nowIso() : undefined;
-
-    const detailsNormalized = validation.details as
-      | NonNullable<GtmInstallation['last_validation_result']>['details']
-      | undefined;
-
-    await storage.updateInstallation(installationId, {
-      status: finalStatus,
-      last_validation_at: nowIso(),
-      last_validation_result: {
-        passed: validation.passed,
-        stage: validation.stage,
-        details: detailsNormalized,
-      },
-      ...(installedAt ? { installed_at: installedAt } : {}),
-    });
-
+    // Step 5 — emit terminal `pending_activation` event (UX §3 Tela 5
+    // encerra modal progress e mostra CTA "Ative no wp-admin → Revalidar").
+    // Frontend (useInstallTracking) trata como step terminal pra fechar SSE.
     await emit({
-      step: validation.passed ? 'validation_passed' : 'validation_failed',
-      status: validation.passed ? 'done' : 'failed',
-      timing_ms: Date.now() - tValidate,
-    });
-
-    // Step 7b — terminal event (UX §3 Tela 5: encerra modal progress).
-    await emit({
-      step: validation.passed ? 'installed' : 'failed',
-      status: validation.passed ? 'done' : 'failed',
+      step: 'pending_activation',
+      status: 'done',
       timing_ms: Date.now() - tStart,
     });
 
-    await appendAuditWithSanitization(storage, {
-      installation_id: installationId,
-      tenant_id: installation.tenant_id,
-      action: validation.passed ? 'validation_passed' : 'validation_failed',
-      // Nota: `stage`/`passed` não estão na whitelist (ADR-0008 §3.7 lista
-      // apenas 7 keys safe). Wrapper filtra. Detalhes ricos vivem em
-      // installation.last_validation_result (typed). Audit apenas marca o
-      // evento ocorreu (action é suficiente pra forensic).
-      rawPayload: {},
-      actor_source: 'tracking-api',
-    });
-
-    console.log(`[deployJob] complete id=${installationId} status=${finalStatus}`);
+    console.log(
+      `[deployJob] uploaded_pending_activation id=${installationId} ` +
+        `dir=${deployResult.uploadDirName ?? 'unknown'}`,
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const truncated = message.slice(0, 500);

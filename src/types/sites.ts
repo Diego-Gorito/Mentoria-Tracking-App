@@ -12,13 +12,19 @@ export type BrandSlug = 'mentoria' | 'mentoria-app' | 'zerohum' | 'ifrn';
 /**
  * Status visível ao usuário no card. Mapa per UX §4.2.
  * Backend `EnrichedSite.status` é mais granular (uploading/activating/validating/
- * uploaded_pending_activation) — colapsamos pros 5 buckets visíveis na lista.
+ * uploaded_pending_activation) — colapsamos pros 6 buckets visíveis na lista.
+ *
+ * Codex adversarial #4 (2026-05-27): `uploaded_pending_activation` virou bucket
+ * VISÍVEL próprio porque é o estado terminal do deploy MVP (plugin no servidor,
+ * aguarda ativação manual no wp-admin). UI mostra CTA "Revalidar" que dispara
+ * `POST /api/installations/:id/revalidate` (validator F-S06 roda → installed).
  */
 export type SiteStatus =
   | 'installed'
   | 'draft'
   | 'failed'
   | 'drift_detected'
+  | 'uploaded_pending_activation'
   | 'not_installed';
 
 /**

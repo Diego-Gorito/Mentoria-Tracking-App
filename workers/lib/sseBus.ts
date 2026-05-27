@@ -39,7 +39,13 @@ export const SSE_EVENT_TTL_SEC = 300;
 /**
  * Steps possíveis no pipeline de deploy — espelha audit actions de F-S07/F-S05.
  *
- * `installed` e `failed` são terminais → SSE endpoint fecha o stream.
+ * Terminais (SSE endpoint fecha o stream):
+ *  - `pending_activation` — terminal happy path MVP (Codex #4, 2026-05-27):
+ *    plugin foi upado mas aguarda ativação manual no wp-admin antes do
+ *    validator. UI fecha modal, mostra CTA "Já ativei, validar agora".
+ *  - `installed` — terminal happy path full (post-revalidate ou activation
+ *    automática Sprint 4).
+ *  - `failed` — terminal erro.
  */
 export type SseEventStep =
   | 'upload_started'
@@ -51,6 +57,7 @@ export type SseEventStep =
   | 'validation_started'
   | 'validation_passed'
   | 'validation_failed'
+  | 'pending_activation'
   | 'installed'
   | 'failed';
 

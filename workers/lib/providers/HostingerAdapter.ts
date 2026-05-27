@@ -65,6 +65,16 @@ const LIST_SITES_CACHE_TTL_MS = 60_000;
 const LIST_SITES_PAGE_SIZE = 100;
 const LIST_SITES_MAX_SITES = 100; // MVP Diego tem <20 sites (F-S04 AC-1)
 
+/**
+ * Per-request timeout via AbortSignal.timeout (Codex adversarial #4 fix,
+ * 2026-05-27). Antes os fetch eram sem timeout — request hanging podia
+ * passar dos 180s do deploy lock e gerar deploy concorrente em outra
+ * sessão. Cálculo do teto:
+ *   3 attempts × 50s + backoff [1s, 2s, 4s] = 157s ≤ 180s (lock TTL)
+ * Hostinger normal responde em <30s, então 50s é folga generosa.
+ */
+const FETCH_TIMEOUT_MS = 50_000;
+
 export interface HostingerAdapterOpts {
   /** Token Hostinger API (Bearer). Já decifrado pelo caller (F-S05 sealDecrypt). */
   token: string;
@@ -348,17 +358,31 @@ export class HostingerAdapter implements IHostingProvider {
   /**
    * Wrapper fetch que normaliza errors em HostingerHttpError (carries statusCode
    * pro withRetry default isRetryable detectar 5xx vs 4xx).
+   *
+   * Codex #4 fix (2026-05-27): força `AbortSignal.timeout(FETCH_TIMEOUT_MS)`
+   * por attempt. Se caller passar `init.signal`, combina via
+   * `AbortSignal.any([caller, timeout])` (Node 20+). Sem caller signal,
+   * usa o timeout sozinho. AbortError vira erro genérico que `withRetry`
+   * vai re-tentar (5xx-like), e ProviderError no terminal failure.
    */
   private async fetchJson<T>(url: string, init: RequestInit): Promise<T> {
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${this.token}`);
     headers.set('Accept', 'application/json');
 
+    // Combina caller signal (opcional) com timeout per-request (sempre).
+    const timeoutSignal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
+    const signal = init.signal
+      ? AbortSignal.any([init.signal, timeoutSignal])
+      : timeoutSignal;
+
     let resp: Response;
     try {
-      resp = await fetch(url, { ...init, headers });
+      resp = await fetch(url, { ...init, headers, signal });
     } catch (err) {
-      // Network error (undici): preserva pro isRetryable detectar
+      // Network error (undici) OU AbortError (timeout/caller cancel): preserva
+      // pro isRetryable detectar. AbortError com `name: 'TimeoutError'` vem
+      // do AbortSignal.timeout — withRetry retenta como 5xx-like.
       throw err;
     }
 
