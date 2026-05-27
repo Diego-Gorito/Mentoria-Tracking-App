@@ -124,6 +124,34 @@ export function Integrations({ onNavigate }: Props) {
           </div>
         )}
 
+        {/* GTM Container — card destacado (ADR-0009 F-S26) */}
+        <article
+          aria-labelledby="gtm-container-title"
+          className="rounded-xl border p-5 mb-4 flex items-center justify-between gap-4"
+          style={{ background: 'var(--app-card-bg)', borderColor: 'var(--app-card-border)' }}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-2xl shrink-0" aria-hidden="true">🏷️</span>
+            <div className="min-w-0">
+              <h3
+                id="gtm-container-title"
+                className="text-heading-sm font-semibold text-fg-on-dark"
+              >
+                GTM Container
+              </h3>
+              <p className="text-body-sm text-fg-on-dark-muted leading-snug">
+                Tags &amp; pixels gerenciados via Google Tag Manager (web + server).
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="primary"
+            onClick={() => onNavigate?.('/integracoes/gtm')}
+          >
+            Gerenciar
+          </Button>
+        </article>
+
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {PLATFORM_ORDER.map((id) => {
             const meta = PLATFORM_META[id]

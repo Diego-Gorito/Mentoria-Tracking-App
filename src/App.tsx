@@ -19,6 +19,7 @@ import { Wizard } from '@/routes/onboarding/Wizard'
 // App routes — Uma
 import { Dashboard } from '@/routes/dashboard/Dashboard'
 import { Integrations } from '@/routes/settings/Integrations'
+import { GtmContainerPage } from '@/routes/settings/GtmContainerPage'
 import { LeadsList } from '@/routes/leads/LeadsList'
 import { LeadDetail } from '@/routes/leads/LeadDetail'
 // Sites routes (F-S10) — auto-provisioner GTM Hostinger
@@ -239,7 +240,11 @@ export function App() {
 
               {/* Integrações — rota canônica /integracoes (antigo /settings/integrations) */}
               {route === 'integracoes' && (
-                <Integrations onNavigate={navigate} />
+                window.location.pathname.startsWith('/integracoes/gtm') ? (
+                  <GtmContainerPage onNavigate={navigate} />
+                ) : (
+                  <Integrations onNavigate={navigate} />
+                )
               )}
 
               {/* Tracking — eventos recentes */}
