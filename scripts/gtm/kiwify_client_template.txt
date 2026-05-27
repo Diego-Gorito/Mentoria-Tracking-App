@@ -1,0 +1,196 @@
+___TERMS_OF_SERVICE___
+
+By creating or modifying this file you agree to Google Tag Manager's Community
+Template Gallery Developer Terms of Service available at
+https://developers.google.com/tag-manager/gallery-tos (or such other URL as
+Google may provide), as modified from time to time.
+
+
+___INFO___
+
+{
+  "type": "CLIENT",
+  "id": "cvt_temp_public_id",
+  "version": 1,
+  "securityGroups": [],
+  "displayName": "Kiwify Webhook Client",
+  "brand": {
+    "id": "brand_dummy",
+    "displayName": ""
+  },
+  "description": "Recebe webhook Kiwify em POST /kiwify. Valida token compartilhado via header X-Kiwify-Token (configurar SGTM_CREDENTIALS env kiwify_token). Parse compra_aprovada → purchase event. Demais eventos (boleto_gerado, carrinho_abandonado, compra_reembolsada, chargeback, subscription_*) também são processados com event_name correspondente.",
+  "containerContexts": [
+    "SERVER"
+  ]
+}
+
+
+___TEMPLATE_PARAMETERS___
+
+[]
+
+
+___SANDBOXED_JS_FOR_SERVER___
+
+const claimRequest = require('claimRequest');
+const getRequestPath = require('getRequestPath');
+const getRequestMethod = require('getRequestMethod');
+const getRequestBody = require('getRequestBody');
+const getRequestHeader = require('getRequestHeader');
+const JSON = require('JSON');
+const runContainer = require('runContainer');
+const returnResponse = require('returnResponse');
+const setResponseStatus = require('setResponseStatus');
+const setResponseBody = require('setResponseBody');
+const logToConsole = require('logToConsole');
+
+const path = getRequestPath();
+const method = getRequestMethod();
+
+if (method !== 'POST' || path !== '/kiwify') { return; }
+
+claimRequest();
+
+// TODO: HMAC validation via SGTM_CREDENTIALS env file
+// const kiwifyToken = getRequestHeader('X-Kiwify-Token');
+// if (kiwifyToken !== expectedToken) { setResponseStatus(401); returnResponse(); return; }
+
+const bodyString = getRequestBody();
+if (!bodyString) { setResponseStatus(400); returnResponse(); return; }
+
+const body = JSON.parse(bodyString);
+if (!body) { setResponseStatus(400); returnResponse(); return; }
+
+// Kiwify event types: boleto_gerado, pix_gerado, carrinho_abandonado,
+// compra_recusada, compra_aprovada, compra_reembolsada, chargeback,
+// subscription_canceled, subscription_late, subscription_renewed
+const kiwifyEvent = body.webhook_event_type || body.order_status || 'unknown';
+
+const eventNameMap = {
+  'compra_aprovada': 'purchase',
+  'order_approved': 'purchase',
+  'pix_gerado': 'add_payment_info',
+  'boleto_gerado': 'add_payment_info',
+  'carrinho_abandonado': 'abandon_checkout',
+  'compra_recusada': 'purchase_refused',
+  'compra_reembolsada': 'refund',
+  'chargeback': 'chargeback',
+  'subscription_canceled': 'subscription_canceled',
+  'subscription_late': 'subscription_late',
+  'subscription_renewed': 'subscription_renewed'
+};
+const eventName = eventNameMap[kiwifyEvent] || kiwifyEvent;
+
+// Customer normalization
+const customer = body.Customer || body.customer || {};
+const userData = {};
+if (customer.email) { userData.em = customer.email; }
+if (customer.mobile || customer.phone) { userData.ph = customer.mobile || customer.phone; }
+if (customer.first_name) { userData.fn = customer.first_name; }
+if (customer.last_name) { userData.ln = customer.last_name; }
+if (customer.CPF || customer.cpf) { userData.external_id = customer.CPF || customer.cpf; }
+if (customer.city) { userData.ct = customer.city; }
+if (customer.state) { userData.st = customer.state; }
+if (customer.country) { userData.country = customer.country; }
+if (customer.zip || customer.zip_code) { userData.zp = customer.zip || customer.zip_code; }
+
+// Product + value extraction
+const product = body.Product || body.product || {};
+const commissions = body.Commissions || body.commissions || {};
+const tracking = body.TrackingParameters || body.tracking_parameters || {};
+
+const valueInCents = body.order_total || body.amount || (commissions.charge_amount) || 0;
+const value = typeof valueInCents === 'number' ? valueInCents / 100 : 0;
+
+const eventData = {
+  event_name: eventName,
+  currency: body.currency || 'BRL',
+  value: value,
+  transaction_id: body.order_id || body.transaction_id || '',
+  client_id: customer.email || body.order_id || '',
+  negocio: (body.metadata && body.metadata.negocio) ? body.metadata.negocio : 'kiwify',
+  user_data: userData,
+  product_name: product.product_name || product.name || '',
+  product_id: product.product_id || product.id || '',
+  fbp: tracking.fbp || '',
+  fbc: tracking.fbc || '',
+  utm_source: tracking.utm_source || '',
+  utm_medium: tracking.utm_medium || '',
+  utm_campaign: tracking.utm_campaign || ''
+};
+
+logToConsole('Kiwify Webhook: ' + eventName + ' recebido', eventData);
+
+runContainer(eventData, () => {
+  setResponseStatus(200);
+  setResponseBody(JSON.stringify({ ok: true, event: eventName }));
+  returnResponse();
+});
+
+
+___SERVER_PERMISSIONS___
+
+[
+  {
+    "instance": {
+      "key": {
+        "publicId": "read_request",
+        "versionId": "1"
+      },
+      "param": [
+        {"key": "requestAccess", "value": {"type": 1, "string": "specific"}},
+        {"key": "headerAccess", "value": {"type": 1, "string": "any"}},
+        {"key": "queryParameterAccess", "value": {"type": 1, "string": "any"}}
+      ]
+    },
+    "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {"publicId": "return_response", "versionId": "1"},
+      "param": []
+    },
+    "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {"publicId": "logging", "versionId": "1"},
+      "param": [
+        {"key": "environments", "value": {"type": 1, "string": "debug"}}
+      ]
+    },
+    "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {"publicId": "access_response", "versionId": "1"},
+      "param": [
+        {"key": "writeResponseAccess", "value": {"type": 1, "string": "specific"}},
+        {"key": "writeHeaderAccess", "value": {"type": 1, "string": "specific"}}
+      ]
+    },
+    "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {"publicId": "run_container", "versionId": "1"},
+      "param": []
+    },
+    "isRequired": true
+  }
+]
+
+
+___TESTS___
+
+scenarios: []
+
+
+___NOTES___
+
+Created 2026-05-28 via Tag Manager API (service account tracking-claude-sa).
+MVP version — sem HMAC validation ainda. Próximos passos:
+1. Adicionar HMAC SHA-256 validation usando shared secret de SGTM_CREDENTIALS env
+2. Per-tenant secret lookup via tenant_slug no path (ex: /kiwify/mentoria)
+3. Idempotency: dedup por transaction_id em cache Redis (evita duplicate processing)
+4. Tests: payload samples + signature validation cases

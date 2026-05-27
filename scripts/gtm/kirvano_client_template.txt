@@ -1,0 +1,204 @@
+___TERMS_OF_SERVICE___
+
+By creating or modifying this file you agree to Google Tag Manager's Community
+Template Gallery Developer Terms of Service available at
+https://developers.google.com/tag-manager/gallery-tos (or such other URL as
+Google may provide), as modified from time to time.
+
+
+___INFO___
+
+{
+  "type": "CLIENT",
+  "id": "cvt_temp_public_id",
+  "version": 1,
+  "securityGroups": [],
+  "displayName": "Kirvano Webhook Client",
+  "brand": {
+    "id": "brand_dummy",
+    "displayName": ""
+  },
+  "description": "Recebe webhook Kirvano em POST /kirvano. Valida token compartilhado via header X-Kirvano-Token (configurar SGTM_CREDENTIALS env kirvano_token). Parse SALE_APPROVED/REFUND/CHARGEBACK/SUBSCRIPTION_* → eventos normalizados pra Meta CAPI + GA4.",
+  "containerContexts": [
+    "SERVER"
+  ]
+}
+
+
+___TEMPLATE_PARAMETERS___
+
+[]
+
+
+___SANDBOXED_JS_FOR_SERVER___
+
+const claimRequest = require('claimRequest');
+const getRequestPath = require('getRequestPath');
+const getRequestMethod = require('getRequestMethod');
+const getRequestBody = require('getRequestBody');
+const getRequestHeader = require('getRequestHeader');
+const JSON = require('JSON');
+const runContainer = require('runContainer');
+const returnResponse = require('returnResponse');
+const setResponseStatus = require('setResponseStatus');
+const setResponseBody = require('setResponseBody');
+const logToConsole = require('logToConsole');
+
+const path = getRequestPath();
+const method = getRequestMethod();
+
+if (method !== 'POST' || path !== '/kirvano') { return; }
+
+claimRequest();
+
+// TODO: HMAC validation via SGTM_CREDENTIALS env file
+// const kirvanoToken = getRequestHeader('X-Kirvano-Token');
+// if (kirvanoToken !== expectedToken) { setResponseStatus(401); returnResponse(); return; }
+
+const bodyString = getRequestBody();
+if (!bodyString) { setResponseStatus(400); returnResponse(); return; }
+
+const body = JSON.parse(bodyString);
+if (!body) { setResponseStatus(400); returnResponse(); return; }
+
+// Kirvano event types: SALE_APPROVED, SALE_REFUSED, SALE_REFUNDED, SALE_CHARGEBACK,
+// SUBSCRIPTION_CREATED, SUBSCRIPTION_CANCELED, SUBSCRIPTION_RENEWED, etc.
+const kirvanoEvent = body.event || 'unknown';
+
+const eventNameMap = {
+  'SALE_APPROVED': 'purchase',
+  'SALE_REFUSED': 'purchase_refused',
+  'SALE_REFUNDED': 'refund',
+  'SALE_CHARGEBACK': 'chargeback',
+  'CART_ABANDONED': 'abandon_checkout',
+  'PIX_GENERATED': 'add_payment_info',
+  'BOLETO_GENERATED': 'add_payment_info',
+  'SUBSCRIPTION_CREATED': 'subscription_created',
+  'SUBSCRIPTION_CANCELED': 'subscription_canceled',
+  'SUBSCRIPTION_RENEWED': 'subscription_renewed',
+  'SUBSCRIPTION_LATE': 'subscription_late'
+};
+const eventName = eventNameMap[kirvanoEvent] || (kirvanoEvent ? kirvanoEvent.toLowerCase() : 'unknown');
+
+// Kirvano payload: { event, data: { customer, order, products[], total_amount, currency } }
+const payload = body.data || {};
+const customer = payload.customer || {};
+const order = payload.order || {};
+const products = payload.products || [];
+
+const userData = {};
+if (customer.email) { userData.em = customer.email; }
+if (customer.phone) { userData.ph = customer.phone; }
+if (customer.first_name || customer.name) {
+  const fullName = (customer.first_name || customer.name || '').trim();
+  const spaceIndex = fullName.indexOf(' ');
+  userData.fn = spaceIndex > -1 ? fullName.substring(0, spaceIndex) : fullName;
+  if (spaceIndex > -1) { userData.ln = fullName.substring(spaceIndex + 1); }
+}
+if (customer.last_name) { userData.ln = customer.last_name; }
+if (customer.cpf || customer.document) { userData.external_id = customer.cpf || customer.document; }
+if (customer.city) { userData.ct = customer.city; }
+if (customer.state) { userData.st = customer.state; }
+if (customer.country) { userData.country = customer.country; }
+if (customer.zipcode || customer.zip) { userData.zp = customer.zipcode || customer.zip; }
+
+const totalAmount = payload.total_amount || order.total || order.amount || 0;
+const value = typeof totalAmount === 'number' ? totalAmount / 100 : 0;
+
+const firstProduct = products[0] || {};
+
+const tracking = payload.tracking || payload.utms || {};
+
+const eventData = {
+  event_name: eventName,
+  currency: payload.currency || order.currency || 'BRL',
+  value: value,
+  transaction_id: order.id || order.order_id || payload.order_id || '',
+  client_id: customer.email || order.id || '',
+  negocio: (payload.metadata && payload.metadata.negocio) ? payload.metadata.negocio : 'kirvano',
+  user_data: userData,
+  product_name: firstProduct.name || firstProduct.product_name || '',
+  product_id: firstProduct.id || firstProduct.product_id || '',
+  items_count: products.length,
+  fbp: tracking.fbp || '',
+  fbc: tracking.fbc || '',
+  utm_source: tracking.utm_source || '',
+  utm_medium: tracking.utm_medium || '',
+  utm_campaign: tracking.utm_campaign || ''
+};
+
+logToConsole('Kirvano Webhook: ' + eventName + ' recebido', eventData);
+
+runContainer(eventData, () => {
+  setResponseStatus(200);
+  setResponseBody(JSON.stringify({ ok: true, event: eventName }));
+  returnResponse();
+});
+
+
+___SERVER_PERMISSIONS___
+
+[
+  {
+    "instance": {
+      "key": {
+        "publicId": "read_request",
+        "versionId": "1"
+      },
+      "param": [
+        {"key": "requestAccess", "value": {"type": 1, "string": "specific"}},
+        {"key": "headerAccess", "value": {"type": 1, "string": "any"}},
+        {"key": "queryParameterAccess", "value": {"type": 1, "string": "any"}}
+      ]
+    },
+    "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {"publicId": "return_response", "versionId": "1"},
+      "param": []
+    },
+    "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {"publicId": "logging", "versionId": "1"},
+      "param": [
+        {"key": "environments", "value": {"type": 1, "string": "debug"}}
+      ]
+    },
+    "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {"publicId": "access_response", "versionId": "1"},
+      "param": [
+        {"key": "writeResponseAccess", "value": {"type": 1, "string": "specific"}},
+        {"key": "writeHeaderAccess", "value": {"type": 1, "string": "specific"}}
+      ]
+    },
+    "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {"publicId": "run_container", "versionId": "1"},
+      "param": []
+    },
+    "isRequired": true
+  }
+]
+
+
+___TESTS___
+
+scenarios: []
+
+
+___NOTES___
+
+Created 2026-05-28 via Tag Manager API (service account tracking-claude-sa).
+MVP version — sem HMAC validation ainda. Próximos passos:
+1. Adicionar HMAC SHA-256 validation usando shared secret de SGTM_CREDENTIALS env
+2. Per-tenant secret lookup via tenant_slug no path (ex: /kirvano/mentoria)
+3. Idempotency: dedup por order.id em cache Redis (evita duplicate processing)
+4. Tests: payload samples + signature validation cases

@@ -1726,6 +1726,95 @@
         "version": "a495e1bb54b3b1fe6e7a9f10fc64aa12e8731428",
         "signature": "9c18df0546739f92bcf6f8b7b95b52ce242696c9c4dfe51cc7936e3cc787877c"
       }
+    },
+    {
+      "path": "accounts/6059193756/containers/253664663/workspaces/2/templates/60",
+      "accountId": "6059193756",
+      "containerId": "253664663",
+      "workspaceId": "2",
+      "templateId": "60",
+      "name": "Kiwify Webhook Client",
+      "fingerprint": "1779896174101",
+      "templateData": "___TERMS_OF_SERVICE___\n\nBy creating or modifying this file you agree to Google Tag Manager's Community\nTemplate Gallery Developer Terms of Service available at\nhttps://developers.google.com/tag-manager/gallery-tos (or such other URL as\nGoogle may provide), as modified from time to time.\n\n\n___INFO___\n\n{\n  \"type\": \"CLIENT\",\n  \"id\": \"cvt_temp_public_id\",\n  \"version\": 1,\n  \"securityGroups\": [],\n  \"displayName\": \"Kiwify Webhook Client\",\n  \"brand\": {\n    \"id\": \"brand_dummy\",\n    \"displayName\": \"\"\n  },\n  \"description\": \"Recebe webhook Kiwify em POST /kiwify. Valida token compartilhado via header X-Kiwify-Token (configurar SGTM_CREDENTIALS env kiwify_token). Parse compra_aprovada \u2192 purchase event. Demais eventos (boleto_gerado, carrinho_abandonado, compra_reembolsada, chargeback, subscription_*) tamb\u00e9m s\u00e3o processados com event_name correspondente.\",\n  \"containerContexts\": [\n    \"SERVER\"\n  ]\n}\n\n\n___TEMPLATE_PARAMETERS___\n\n[]\n\n\n___SANDBOXED_JS_FOR_SERVER___\n\nconst claimRequest = require('claimRequest');\nconst getRequestPath = require('getRequestPath');\nconst getRequestMethod = require('getRequestMethod');\nconst getRequestBody = require('getRequestBody');\nconst getRequestHeader = require('getRequestHeader');\nconst JSON = require('JSON');\nconst runContainer = require('runContainer');\nconst returnResponse = require('returnResponse');\nconst setResponseStatus = require('setResponseStatus');\nconst setResponseBody = require('setResponseBody');\nconst logToConsole = require('logToConsole');\n\nconst path = getRequestPath();\nconst method = getRequestMethod();\n\nif (method !== 'POST' || path !== '/kiwify') { return; }\n\nclaimRequest();\n\n// TODO: HMAC validation via SGTM_CREDENTIALS env file\n// const kiwifyToken = getRequestHeader('X-Kiwify-Token');\n// if (kiwifyToken !== expectedToken) { setResponseStatus(401); returnResponse(); return; }\n\nconst bodyString = getRequestBody();\nif (!bodyString) { setResponseStatus(400); returnResponse(); return; }\n\nconst body = JSON.parse(bodyString);\nif (!body) { setResponseStatus(400); returnResponse(); return; }\n\n// Kiwify event types: boleto_gerado, pix_gerado, carrinho_abandonado,\n// compra_recusada, compra_aprovada, compra_reembolsada, chargeback,\n// subscription_canceled, subscription_late, subscription_renewed\nconst kiwifyEvent = body.webhook_event_type || body.order_status || 'unknown';\n\nconst eventNameMap = {\n  'compra_aprovada': 'purchase',\n  'order_approved': 'purchase',\n  'pix_gerado': 'add_payment_info',\n  'boleto_gerado': 'add_payment_info',\n  'carrinho_abandonado': 'abandon_checkout',\n  'compra_recusada': 'purchase_refused',\n  'compra_reembolsada': 'refund',\n  'chargeback': 'chargeback',\n  'subscription_canceled': 'subscription_canceled',\n  'subscription_late': 'subscription_late',\n  'subscription_renewed': 'subscription_renewed'\n};\nconst eventName = eventNameMap[kiwifyEvent] || kiwifyEvent;\n\n// Customer normalization\nconst customer = body.Customer || body.customer || {};\nconst userData = {};\nif (customer.email) { userData.em = customer.email; }\nif (customer.mobile || customer.phone) { userData.ph = customer.mobile || customer.phone; }\nif (customer.first_name) { userData.fn = customer.first_name; }\nif (customer.last_name) { userData.ln = customer.last_name; }\nif (customer.CPF || customer.cpf) { userData.external_id = customer.CPF || customer.cpf; }\nif (customer.city) { userData.ct = customer.city; }\nif (customer.state) { userData.st = customer.state; }\nif (customer.country) { userData.country = customer.country; }\nif (customer.zip || customer.zip_code) { userData.zp = customer.zip || customer.zip_code; }\n\n// Product + value extraction\nconst product = body.Product || body.product || {};\nconst commissions = body.Commissions || body.commissions || {};\nconst tracking = body.TrackingParameters || body.tracking_parameters || {};\n\nconst valueInCents = body.order_total || body.amount || (commissions.charge_amount) || 0;\nconst value = typeof valueInCents === 'number' ? valueInCents / 100 : 0;\n\nconst eventData = {\n  event_name: eventName,\n  currency: body.currency || 'BRL',\n  value: value,\n  transaction_id: body.order_id || body.transaction_id || '',\n  client_id: customer.email || body.order_id || '',\n  negocio: (body.metadata && body.metadata.negocio) ? body.metadata.negocio : 'kiwify',\n  user_data: userData,\n  product_name: product.product_name || product.name || '',\n  product_id: product.product_id || product.id || '',\n  fbp: tracking.fbp || '',\n  fbc: tracking.fbc || '',\n  utm_source: tracking.utm_source || '',\n  utm_medium: tracking.utm_medium || '',\n  utm_campaign: tracking.utm_campaign || ''\n};\n\nlogToConsole('Kiwify Webhook: ' + eventName + ' recebido', eventData);\n\nrunContainer(eventData, () => {\n  setResponseStatus(200);\n  setResponseBody(JSON.stringify({ ok: true, event: eventName }));\n  returnResponse();\n});\n\n\n___SERVER_PERMISSIONS___\n\n[\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"read_request\",\n        \"versionId\": \"1\"\n      },\n      \"param\": [\n        {\n          \"key\": \"requestAccess\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"specific\"\n          }\n        },\n        {\n          \"key\": \"headerAccess\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"any\"\n          }\n        },\n        {\n          \"key\": \"queryParameterAccess\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"any\"\n          }\n        }\n      ]\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"return_response\",\n        \"versionId\": \"1\"\n      },\n      \"param\": []\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"logging\",\n        \"versionId\": \"1\"\n      },\n      \"param\": [\n        {\n          \"key\": \"environments\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"debug\"\n          }\n        }\n      ]\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"access_response\",\n        \"versionId\": \"1\"\n      },\n      \"param\": [\n        {\n          \"key\": \"writeResponseAccess\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"specific\"\n          }\n        },\n        {\n          \"key\": \"writeHeaderAccess\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"specific\"\n          }\n        }\n      ]\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"run_container\",\n        \"versionId\": \"1\"\n      },\n      \"param\": []\n    },\n    \"isRequired\": true\n  }\n]\n\n\n___TESTS___\n\nscenarios: []\n\n\n___NOTES___\n\nCreated 2026-05-28 via Tag Manager API (service account tracking-claude-sa).\nMVP version \u2014 sem HMAC validation ainda. Pr\u00f3ximos passos:\n1. Adicionar HMAC SHA-256 validation usando shared secret de SGTM_CREDENTIALS env\n2. Per-tenant secret lookup via tenant_slug no path (ex: /kiwify/mentoria)\n3. Idempotency: dedup por transaction_id em cache Redis (evita duplicate processing)\n4. Tests: payload samples + signature validation cases\n\n\n"
+    },
+    {
+      "path": "accounts/6059193756/containers/253664663/workspaces/2/templates/61",
+      "accountId": "6059193756",
+      "containerId": "253664663",
+      "workspaceId": "2",
+      "templateId": "61",
+      "name": "Kirvano Webhook Client",
+      "fingerprint": "1779896199334",
+      "templateData": "___TERMS_OF_SERVICE___\n\nBy creating or modifying this file you agree to Google Tag Manager's Community\nTemplate Gallery Developer Terms of Service available at\nhttps://developers.google.com/tag-manager/gallery-tos (or such other URL as\nGoogle may provide), as modified from time to time.\n\n\n___INFO___\n\n{\n  \"type\": \"CLIENT\",\n  \"id\": \"cvt_temp_public_id\",\n  \"version\": 1,\n  \"securityGroups\": [],\n  \"displayName\": \"Kirvano Webhook Client\",\n  \"brand\": {\n    \"id\": \"brand_dummy\",\n    \"displayName\": \"\"\n  },\n  \"description\": \"Recebe webhook Kirvano em POST /kirvano. Valida token compartilhado via header X-Kirvano-Token (configurar SGTM_CREDENTIALS env kirvano_token). Parse SALE_APPROVED/REFUND/CHARGEBACK/SUBSCRIPTION_* \u2192 eventos normalizados pra Meta CAPI + GA4.\",\n  \"containerContexts\": [\n    \"SERVER\"\n  ]\n}\n\n\n___TEMPLATE_PARAMETERS___\n\n[]\n\n\n___SANDBOXED_JS_FOR_SERVER___\n\nconst claimRequest = require('claimRequest');\nconst getRequestPath = require('getRequestPath');\nconst getRequestMethod = require('getRequestMethod');\nconst getRequestBody = require('getRequestBody');\nconst getRequestHeader = require('getRequestHeader');\nconst JSON = require('JSON');\nconst runContainer = require('runContainer');\nconst returnResponse = require('returnResponse');\nconst setResponseStatus = require('setResponseStatus');\nconst setResponseBody = require('setResponseBody');\nconst logToConsole = require('logToConsole');\n\nconst path = getRequestPath();\nconst method = getRequestMethod();\n\nif (method !== 'POST' || path !== '/kirvano') { return; }\n\nclaimRequest();\n\n// TODO: HMAC validation via SGTM_CREDENTIALS env file\n// const kirvanoToken = getRequestHeader('X-Kirvano-Token');\n// if (kirvanoToken !== expectedToken) { setResponseStatus(401); returnResponse(); return; }\n\nconst bodyString = getRequestBody();\nif (!bodyString) { setResponseStatus(400); returnResponse(); return; }\n\nconst body = JSON.parse(bodyString);\nif (!body) { setResponseStatus(400); returnResponse(); return; }\n\n// Kirvano event types: SALE_APPROVED, SALE_REFUSED, SALE_REFUNDED, SALE_CHARGEBACK,\n// SUBSCRIPTION_CREATED, SUBSCRIPTION_CANCELED, SUBSCRIPTION_RENEWED, etc.\nconst kirvanoEvent = body.event || 'unknown';\n\nconst eventNameMap = {\n  'SALE_APPROVED': 'purchase',\n  'SALE_REFUSED': 'purchase_refused',\n  'SALE_REFUNDED': 'refund',\n  'SALE_CHARGEBACK': 'chargeback',\n  'CART_ABANDONED': 'abandon_checkout',\n  'PIX_GENERATED': 'add_payment_info',\n  'BOLETO_GENERATED': 'add_payment_info',\n  'SUBSCRIPTION_CREATED': 'subscription_created',\n  'SUBSCRIPTION_CANCELED': 'subscription_canceled',\n  'SUBSCRIPTION_RENEWED': 'subscription_renewed',\n  'SUBSCRIPTION_LATE': 'subscription_late'\n};\nconst eventName = eventNameMap[kirvanoEvent] || (kirvanoEvent ? kirvanoEvent.toLowerCase() : 'unknown');\n\n// Kirvano payload: { event, data: { customer, order, products[], total_amount, currency } }\nconst payload = body.data || {};\nconst customer = payload.customer || {};\nconst order = payload.order || {};\nconst products = payload.products || [];\n\nconst userData = {};\nif (customer.email) { userData.em = customer.email; }\nif (customer.phone) { userData.ph = customer.phone; }\nif (customer.first_name || customer.name) {\n  const fullName = (customer.first_name || customer.name || '').trim();\n  const spaceIndex = fullName.indexOf(' ');\n  userData.fn = spaceIndex > -1 ? fullName.substring(0, spaceIndex) : fullName;\n  if (spaceIndex > -1) { userData.ln = fullName.substring(spaceIndex + 1); }\n}\nif (customer.last_name) { userData.ln = customer.last_name; }\nif (customer.cpf || customer.document) { userData.external_id = customer.cpf || customer.document; }\nif (customer.city) { userData.ct = customer.city; }\nif (customer.state) { userData.st = customer.state; }\nif (customer.country) { userData.country = customer.country; }\nif (customer.zipcode || customer.zip) { userData.zp = customer.zipcode || customer.zip; }\n\nconst totalAmount = payload.total_amount || order.total || order.amount || 0;\nconst value = typeof totalAmount === 'number' ? totalAmount / 100 : 0;\n\nconst firstProduct = products[0] || {};\n\nconst tracking = payload.tracking || payload.utms || {};\n\nconst eventData = {\n  event_name: eventName,\n  currency: payload.currency || order.currency || 'BRL',\n  value: value,\n  transaction_id: order.id || order.order_id || payload.order_id || '',\n  client_id: customer.email || order.id || '',\n  negocio: (payload.metadata && payload.metadata.negocio) ? payload.metadata.negocio : 'kirvano',\n  user_data: userData,\n  product_name: firstProduct.name || firstProduct.product_name || '',\n  product_id: firstProduct.id || firstProduct.product_id || '',\n  items_count: products.length,\n  fbp: tracking.fbp || '',\n  fbc: tracking.fbc || '',\n  utm_source: tracking.utm_source || '',\n  utm_medium: tracking.utm_medium || '',\n  utm_campaign: tracking.utm_campaign || ''\n};\n\nlogToConsole('Kirvano Webhook: ' + eventName + ' recebido', eventData);\n\nrunContainer(eventData, () => {\n  setResponseStatus(200);\n  setResponseBody(JSON.stringify({ ok: true, event: eventName }));\n  returnResponse();\n});\n\n\n___SERVER_PERMISSIONS___\n\n[\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"read_request\",\n        \"versionId\": \"1\"\n      },\n      \"param\": [\n        {\n          \"key\": \"requestAccess\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"specific\"\n          }\n        },\n        {\n          \"key\": \"headerAccess\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"any\"\n          }\n        },\n        {\n          \"key\": \"queryParameterAccess\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"any\"\n          }\n        }\n      ]\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"return_response\",\n        \"versionId\": \"1\"\n      },\n      \"param\": []\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"logging\",\n        \"versionId\": \"1\"\n      },\n      \"param\": [\n        {\n          \"key\": \"environments\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"debug\"\n          }\n        }\n      ]\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"access_response\",\n        \"versionId\": \"1\"\n      },\n      \"param\": [\n        {\n          \"key\": \"writeResponseAccess\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"specific\"\n          }\n        },\n        {\n          \"key\": \"writeHeaderAccess\",\n          \"value\": {\n            \"type\": 1,\n            \"string\": \"specific\"\n          }\n        }\n      ]\n    },\n    \"isRequired\": true\n  },\n  {\n    \"instance\": {\n      \"key\": {\n        \"publicId\": \"run_container\",\n        \"versionId\": \"1\"\n      },\n      \"param\": []\n    },\n    \"isRequired\": true\n  }\n]\n\n\n___TESTS___\n\nscenarios: []\n\n\n___NOTES___\n\nCreated 2026-05-28 via Tag Manager API (service account tracking-claude-sa).\nMVP version \u2014 sem HMAC validation ainda. Pr\u00f3ximos passos:\n1. Adicionar HMAC SHA-256 validation usando shared secret de SGTM_CREDENTIALS env\n2. Per-tenant secret lookup via tenant_slug no path (ex: /kirvano/mentoria)\n3. Idempotency: dedup por order.id em cache Redis (evita duplicate processing)\n4. Tests: payload samples + signature validation cases\n\n\n"
+    }
+  ],
+  "clients": [
+    {
+      "path": "accounts/6059193756/containers/253664663/workspaces/2/clients/1",
+      "accountId": "6059193756",
+      "containerId": "253664663",
+      "workspaceId": "2",
+      "clientId": "1",
+      "name": "GA4",
+      "type": "gaaw_client",
+      "parameter": [
+        {
+          "type": "boolean",
+          "key": "activateDefaultPaths",
+          "value": "true"
+        },
+        {
+          "type": "template",
+          "key": "cookieManagement",
+          "value": "server"
+        },
+        {
+          "type": "template",
+          "key": "cookieName",
+          "value": "FPID"
+        },
+        {
+          "type": "template",
+          "key": "cookieDomain",
+          "value": "auto"
+        },
+        {
+          "type": "template",
+          "key": "cookiePath",
+          "value": "/"
+        },
+        {
+          "type": "template",
+          "key": "cookieMaxAgeInSec",
+          "value": "63072000"
+        }
+      ],
+      "fingerprint": "1779864202738",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/253664663/workspaces/2/clients/1?apiLink=client"
+    },
+    {
+      "path": "accounts/6059193756/containers/253664663/workspaces/2/clients/62",
+      "accountId": "6059193756",
+      "containerId": "253664663",
+      "workspaceId": "2",
+      "clientId": "62",
+      "name": "01.0X [CT] Kiwify Webhook Receiver",
+      "type": "cvt_253664663_60",
+      "priority": 100,
+      "fingerprint": "1779896237920",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/253664663/workspaces/2/clients/62?apiLink=client"
+    },
+    {
+      "path": "accounts/6059193756/containers/253664663/workspaces/2/clients/63",
+      "accountId": "6059193756",
+      "containerId": "253664663",
+      "workspaceId": "2",
+      "clientId": "63",
+      "name": "01.0X [CT] Kirvano Webhook Receiver",
+      "type": "cvt_253664663_61",
+      "priority": 101,
+      "fingerprint": "1779896239520",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/253664663/workspaces/2/clients/63?apiLink=client"
     }
   ]
 }
