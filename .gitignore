@@ -50,3 +50,6 @@ supabase/.temp/
 
 # Wrangler / Cloudflare auto-generated types (regenerate locally with `wrangler types`)
 worker-configuration.d.ts
+
+# GTM4WP upstream vendored (F-S13) — baixado via scripts/fetch-gtm4wp.sh, NUNCA commitar
+plugins/gtm4wp-mentoria/gtm4wp/

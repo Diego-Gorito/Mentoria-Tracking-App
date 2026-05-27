@@ -34,16 +34,25 @@ import { TokenInvalidError, RateLimitError, DomainNotOwnedError } from '../lib/p
 import { validate as runValidator, type ValidationResult } from '../lib/validator';
 import { appendAuditWithSanitization } from '../lib/audit';
 import { publishEvent, type SseEvent } from '../lib/sseBus';
+import {
+  buildPlugin as runBuildPlugin,
+  type BuildPluginInput,
+  type BuildPluginResult,
+} from '../../scripts/build-plugin';
 
 export interface DeployJobDeps {
   storage: IGtmStorage;
   /** Factory que retorna o provider apropriado pra installation alvo. */
   getProvider: (installation: GtmInstallation) => Promise<IHostingProvider>;
   /**
-   * Build do plugin GTM4WP customizado pra instalação.
-   * @todo F-S13 — implementar build real. Stub atual retorna path fake.
+   * Build do plugin GTM4WP customizado pra instalação (F-S13 AC-2 + AC-7).
+   *
+   * Default: `runBuildPlugin` (scripts/build-plugin.ts) — copia
+   * `plugins/gtm4wp-mentoria/` pra /tmp + renderiza mentoria-config.json.
+   * Tests podem injetar versão mock pra evitar I/O em filesystem.
+   * Sempre invocado com cleanup() no `finally` do pipeline (AC-7).
    */
-  buildPlugin?: (installation: GtmInstallation) => Promise<string> | string;
+  buildPlugin?: (input: BuildPluginInput) => Promise<BuildPluginResult>;
   /**
    * Validador pós-deploy 2-stage (HEAD+GET). Default usa `validate` de
    * `workers/lib/validator.ts` (F-S06). Tests podem injetar mock.
@@ -67,13 +76,6 @@ function nowIso(): ISO8601 {
 }
 
 /**
- * @todo F-S13 — substituir por build real (zip + extract assets per brand).
- */
-function defaultBuildPluginStub(_installation: GtmInstallation): string {
-  return '/tmp/plugin-stub';
-}
-
-/**
  * Executa pipeline completo do deploy. NUNCA throw — captura tudo e marca
  * `status='failed'` se algo deu errado. Sempre libera o lock no finally.
  */
@@ -82,7 +84,7 @@ export async function deployJob(
   deps: DeployJobDeps,
 ): Promise<void> {
   const { storage, getProvider, buildPlugin, validate, redisClient } = deps;
-  const buildFn = buildPlugin ?? defaultBuildPluginStub;
+  const buildFn = buildPlugin ?? runBuildPlugin;
   const validateFn = validate ?? runValidator;
 
   /**
@@ -98,6 +100,9 @@ export async function deployJob(
   };
 
   let installation: GtmInstallation | null = null;
+  // F-S13 AC-7: cleanup do temp dir do plugin é guardado fora do try
+  // pra rodar no finally — mesmo se deploy falha.
+  let pluginCleanup: (() => Promise<void>) | null = null;
   // Timings pra incluir em `timing_ms` no evento (F-S12 AC-2 shape JSON).
   const tStart = Date.now();
 
@@ -125,8 +130,14 @@ export async function deployJob(
       actor_source: 'tracking-api',
     });
 
-    // Step 2 — build plugin (TODO F-S13 stub)
-    const pluginPath = await buildFn(installation);
+    // Step 2 — build plugin (F-S13 AC-2 + AC-6: copia plugins/gtm4wp-mentoria/
+    // pra /tmp/, renderiza mentoria-config.json com container_id + brand_slug).
+    const { pluginPath, cleanup } = await buildFn({
+      container_id: installation.gtm_container_id,
+      brand_slug: installation.brand_slug,
+      plugin_version: installation.plugin_version,
+    });
+    pluginCleanup = cleanup;
 
     // Step 3 — provider.deployPlugin
     const provider = await getProvider(installation);
@@ -274,6 +285,17 @@ export async function deployJob(
       );
     }
   } finally {
+    // F-S13 AC-7: cleanup do temp dir do plugin sempre roda (mesmo se deploy
+    // falha). Idempotente (rm -rf com force) — não throw se já foi limpo.
+    if (pluginCleanup) {
+      try {
+        await pluginCleanup();
+      } catch (cleanupErr) {
+        console.error(
+          `[deployJob] plugin_cleanup_failed id=${installationId} msg=${(cleanupErr as Error).message}`,
+        );
+      }
+    }
     try {
       await storage.releaseLock(installationId);
     } catch (lockErr) {

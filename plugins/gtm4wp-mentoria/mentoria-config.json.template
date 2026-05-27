@@ -1,0 +1,5 @@
+{
+  "container_id": "{{container_id}}",
+  "brand_slug": "{{brand_slug}}",
+  "plugin_version": "{{plugin_version}}"
+}
