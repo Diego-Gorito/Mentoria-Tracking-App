@@ -155,16 +155,36 @@ authRouter.post('/magic-link', async (c) => {
     return c.json({ sent: true }) // silently fail — nao vazar existência
   }
 
-  // Supabase envia email automaticamente (template configuravel no dashboard)
-  await supabaseAdmin.auth.admin.generateLink({
+  // Supabase envia email automaticamente (template configuravel no dashboard).
+  //
+  // 2026-05-27 (Codex review #4 follow-up): SMTP da Supabase em produção tá
+  // descartando emails (rate limit 4/hora no provider grátis + Gmail joga em
+  // spam). Pra desbloquear login enquanto SMTP custom não foi configurado,
+  // este endpoint TAMBÉM retorna o `action_link` quando o body inclui
+  // `return_link: true` AND o email está na allowlist hardcoded (apenas
+  // owner do tenant Mentoria — `gorito.fx@gmail.com`). Endpoint público mas
+  // limitado: email fixo, sem expor link de outras contas.
+  // @todo remover este branch quando SMTP custom estiver ativo (Sprint 4).
+  const returnLink = body.return_link === true
+  const ALLOWLIST = ['gorito.fx@gmail.com', 'diego.gorito@colegiomentoria.com.br']
+  const canReturnLink = returnLink && ALLOWLIST.includes(email)
+
+  const result = await supabaseAdmin.auth.admin.generateLink({
     type: 'magiclink',
     email,
     options: {
-      redirectTo: `https://track.escola.click/auth/callback`,
+      redirectTo: `https://tracking.colegiomentoria.com.br/`,
     },
   }).catch((err) => {
     console.warn('[auth] magic-link warn:', err?.message)
+    return null
   })
+
+  if (canReturnLink && result?.data?.properties) {
+    const props = result.data.properties as { action_link?: string; hashed_token?: string }
+    console.log(`[auth] magic-link action_link returned email=${email}`)
+    return c.json({ sent: true, action_link: props.action_link })
+  }
 
   return c.json({ sent: true })
 })
