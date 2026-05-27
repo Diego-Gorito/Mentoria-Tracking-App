@@ -30,6 +30,7 @@ export const GTM_SCOPES = {
   editContainers: 'https://www.googleapis.com/auth/tagmanager.edit.containers',
   editContainerVersions:
     'https://www.googleapis.com/auth/tagmanager.edit.containerversions',
+  deleteContainers: 'https://www.googleapis.com/auth/tagmanager.delete.containers',
   publish: 'https://www.googleapis.com/auth/tagmanager.publish',
   manageUsers: 'https://www.googleapis.com/auth/tagmanager.manage.users',
 } as const;

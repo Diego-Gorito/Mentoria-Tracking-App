@@ -81,7 +81,7 @@ A gente saiu de **MVP single-tenant** (Mentoria/ZeroHum/IFRN — 4 containers ma
 
 3. **Service Account auth** — JSON key `/Volumes/SSD 2T/Dev/tracking-claude-sa.json` movido pra Supabase Vault (FORA do filesystem) acessada em runtime via `vault.decrypted_secrets`. Em prod, sopa env `GCP_SA_KEY_VAULT_ID`.
 
-4. **Rate limiting** — throttle 100ms entre calls GTM API (`p-limit` lib). Total clone ~45s. UI mostra progress SSE (reusa pattern ADR-0008 §3.6 sseBus).
+4. **Rate limiting** — throttle **500ms** entre calls GTM API (`p-limit` lib). Total clone ~2-3min. UI mostra progress SSE (reusa pattern ADR-0008 §3.6 sseBus). **Update 2026-05-28 pós-smoke E2E**: 100ms tripava `quota exceeded "Queries per minute per user"` em master V2 grande (~140 entities). 500ms = ~120 req/min cabe no limit. Retry backoff exponencial [1s, 5s, 15s, 60s] pra recover de rate limit "per minute".
 
 5. **Master update propagation** — manual via UI "Republish from master v0.X". Backend re-clone preservando vars do tenant. Não é re-clone full (perderia customizações [CT-LOCAL]); é **diff sync**:
    - Tags + vars + triggers + templates + clients do master V2 entram (ou sobrescrevem se name match)
@@ -113,12 +113,24 @@ Decisão Diego: **A**. Trade-off: clientes que saírem podem solicitar export do
 
 ### 3.2 Sub-problema: GTM API rate limits
 
-Observado em testes desta sessão (2026-05-28):
-- 22 tags criadas em ~13s (sleep 0.5s entre) — sem erro
-- 60+ vars + 14 triggers + 14 templates + 22 tags = ~120 calls sem rate limit hit
-- Erros 429 só apareceram quando passou de ~30 req/s burst
+Observado em testes 2026-05-28:
+- 22 tags criadas em ~13s (sleep 500ms entre, batch isolado) — sem erro
+- Smoke READ-ONLY: 4 calls em 5.5s — sem erro
+- **Smoke E2E clone master V2 web (~140 entities) com throttle 100ms TRIPOU 429**
+  com message: `Quota exceeded for quota metric 'Queries' and limit 'Queries per
+  minute per user' of service 'tagmanager.googleapis.com'`.
 
-Plano: usar `p-limit({ concurrency: 1 })` com 100ms delay garantido entre calls. Pior caso 1 cliente = 300 calls × 100ms = 30s. UI SSE mostra progresso por etapa.
+**Decisão pós-smoke**: throttle **500ms** (= ~120 req/min, dentro do limit GTM).
+Clone master V2 completo (~140 entities) = ~70s. Retry backoff
+**[1s, 5s, 15s, 60s]** (4 tentativas) — o último 60s cobre rate limit "per
+minute" reset.
+
+Plano: usar `p-limit({ concurrency: 1 })` com 500ms delay garantido entre calls.
+Pior caso 1 cliente = 280 calls × 500ms = 2.5min. UI SSE mostra progresso por etapa.
+
+**Scopes SA**: necessários os 4: `edit.containers`, `edit.containerversions`,
+`delete.containers` (cleanup órfãos!), `publish`. `readonly` opcional pra audit.
+Descoberto via smoke que DELETE retorna 403 sem `delete.containers` específico.
 
 ### 3.3 Sub-problema: Web ↔ Server linkage
 

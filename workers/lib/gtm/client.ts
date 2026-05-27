@@ -41,10 +41,20 @@ import type {
 } from './types';
 
 const GTM_API_BASE = 'https://tagmanager.googleapis.com/tagmanager/v2';
-const DEFAULT_THROTTLE_MS = 100;
+/**
+ * Throttle default 500ms = ~120 req/min.
+ * GTM API limit observado em smoke E2E 2026-05-28: "Queries per minute per user"
+ * trip em ~60-120 req/min. Master web V2 tem ~140 entities, então 100ms estourava
+ * o limit ANTES de copy_tags terminar. 500ms é folga generosa pra batches grandes.
+ */
+const DEFAULT_THROTTLE_MS = 500;
 const FETCH_TIMEOUT_MS = 30_000;
-const MAX_RETRIES = 3;
-const RETRY_DELAYS_MS = [1000, 2000, 4000];
+const MAX_RETRIES = 4;
+/**
+ * Backoff longo porque rate limit "per minute" precisa esperar > 60s pra reset.
+ * [1s, 5s, 15s, 60s] = total até 81s antes de falhar definitivo.
+ */
+const RETRY_DELAYS_MS = [1000, 5000, 15000, 60000];
 
 export interface GtmApiClientOpts {
   /** Throttle entre requests (default 100ms = ~10 req/s). */

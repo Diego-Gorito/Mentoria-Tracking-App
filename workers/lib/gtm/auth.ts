@@ -24,12 +24,17 @@ import {
 import { GtmAuthError } from './errors';
 
 /**
- * Default scopes pro use case de provision: full edit + publish.
- * readonly não é suficiente — precisa create container, copy entities, publish version.
+ * Default scopes pro use case de provision: full edit + publish + delete (janitor).
+ * readonly não é suficiente — precisa create container, copy entities, publish version,
+ * delete container (cleanup órfãos).
+ *
+ * NOTA: delete.containers descoberto necessário em smoke E2E 2026-05-28 —
+ * delete.container retorna 403 sem este scope.
  */
 export const DEFAULT_GTM_SCOPES: GtmScope[] = [
   GTM_SCOPES.editContainers,
   GTM_SCOPES.editContainerVersions,
+  GTM_SCOPES.deleteContainers,
   GTM_SCOPES.publish,
   GTM_SCOPES.readonly,
 ];

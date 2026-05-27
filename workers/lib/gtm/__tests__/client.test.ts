@@ -72,8 +72,9 @@ describe('GtmApiClient', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it('after 3 retries throws GtmRateLimitError', async () => {
+  it('after MAX_RETRIES throws GtmRateLimitError', async () => {
     const fetchImpl = mockFetch([
+      { status: 429, body: { error: { message: 'rate limit' } } },
       { status: 429, body: { error: { message: 'rate limit' } } },
       { status: 429, body: { error: { message: 'rate limit' } } },
       { status: 429, body: { error: { message: 'rate limit' } } },
@@ -86,11 +87,12 @@ describe('GtmApiClient', () => {
     // Attach catcher SYNC pra evitar unhandled rejection warning quando
     // vi.advanceTimersByTimeAsync resolve rejection antes do await.
     const p = client.getContainer(ACCOUNT, '123').catch((e) => e);
-    await vi.advanceTimersByTimeAsync(10_000);
+    // Backoff total: 1+5+15+60 = 81s. Advance enough.
+    await vi.advanceTimersByTimeAsync(90_000);
     const caught = await p;
     expect(caught).toBeInstanceOf(GtmRateLimitError);
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
-  });
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+  }, 30_000);
 
   it('createContainer POSTa body correto', async () => {
     const fetchImpl = mockFetch([
