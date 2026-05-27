@@ -19,11 +19,18 @@ import { Wizard } from '@/routes/onboarding/Wizard'
 // App routes — Uma
 import { Dashboard } from '@/routes/dashboard/Dashboard'
 import { Integrations } from '@/routes/settings/Integrations'
+import { LeadsList } from '@/routes/leads/LeadsList'
+import { LeadDetail } from '@/routes/leads/LeadDetail'
+// Sites routes (F-S10) — auto-provisioner GTM Hostinger
+import { SitesListPage } from '@/routes/sites/SitesListPage'
+import { ConnectHostingerPage } from '@/routes/sites/ConnectHostingerPage'
+import { SiteDetailPage } from '@/routes/sites/SiteDetailPage'
+import { SiteAuditLogPage } from '@/routes/sites/SiteAuditLogPage'
 import { AppShell } from '@/components/layout/AppShell'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Logo } from '@/components/ui/Logo'
 import { Button } from '@/components/ui/Button'
-import { Pulse, Target, Users, Gear } from '@phosphor-icons/react'
+import { Pulse, Target, Gear } from '@phosphor-icons/react'
 
 type Route =
   | 'landing'
@@ -36,7 +43,46 @@ type Route =
   | 'conversoes'
   | 'integracoes'
   | 'leads'
+  | 'sites'
   | 'configuracoes'
+
+/**
+ * Sub-state da rota 'sites' (F-S10).
+ *
+ * Decisão arquitetural: state machine única (`sitesSubpage` enum) em vez de
+ * 4 estados booleanos. Razão: rotas /sites/*  são mutuamente exclusivas e
+ * deep-link parsing mapeia 1:1 ao enum. Espelha o pattern do `selectedLeadId`
+ * mas mais expressivo (4 destinos vs binário list/detail).
+ *
+ * - 'list'    → /sites
+ * - 'connect' → /sites/connect
+ * - 'detail'  → /sites/:siteId
+ * - 'logs'    → /sites/:siteId/logs
+ */
+type SitesSubpage = 'list' | 'connect' | 'detail' | 'logs'
+
+/** Parse pathname /sites* em { subpage, siteId? }. */
+function parseSitesPath(pathname: string): { subpage: SitesSubpage; siteId: string | null } {
+  // /sites
+  if (pathname === '/sites' || pathname === '/sites/') {
+    return { subpage: 'list', siteId: null }
+  }
+  // /sites/connect
+  if (pathname === '/sites/connect' || pathname === '/sites/connect/') {
+    return { subpage: 'connect', siteId: null }
+  }
+  // /sites/:id/logs
+  const logsMatch = pathname.match(/^\/sites\/([^/]+)\/logs\/?$/)
+  if (logsMatch) {
+    return { subpage: 'logs', siteId: decodeURIComponent(logsMatch[1]) }
+  }
+  // /sites/:id
+  const detailMatch = pathname.match(/^\/sites\/([^/]+)\/?$/)
+  if (detailMatch) {
+    return { subpage: 'detail', siteId: decodeURIComponent(detailMatch[1]) }
+  }
+  return { subpage: 'list', siteId: null }
+}
 
 function resolveInitialRoute(): Route {
   const path = window.location.pathname
@@ -58,6 +104,7 @@ function resolveInitialRoute(): Route {
   if (path.startsWith('/integracoes') || path.startsWith('/settings/integrations'))
     return 'integracoes'
   if (path.startsWith('/leads')) return 'leads'
+  if (path.startsWith('/sites')) return 'sites'
   if (path.startsWith('/configuracoes') || path.startsWith('/settings')) return 'configuracoes'
 
   return 'dashboard'
@@ -74,18 +121,37 @@ const VALID_ROUTES: Route[] = [
   'conversoes',
   'integracoes',
   'leads',
+  'sites',
   'configuracoes',
 ]
 
 export function App() {
   const [route, setRoute] = useState<Route>(resolveInitialRoute)
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
+
+  // F-S10 — sub-state da rota 'sites' (list/connect/detail/logs + siteId opcional).
+  // Inicializa parseando o pathname atual pra suportar deep-link/refresh.
+  const [sitesState, setSitesState] = useState<{
+    subpage: SitesSubpage
+    siteId: string | null
+  }>(() => parseSitesPath(window.location.pathname))
 
   function navigate(href: string) {
-    const clean = href.replace(/^\//, '').split('?')[0]
-    const matched = VALID_ROUTES.find((r) => clean === r || clean.startsWith(r + '/'))
+    const cleanWithQs = href.replace(/^\//, '')
+    const clean = cleanWithQs.split('?')[0]
+    // Match exato OU prefix `<route>/...`. Pega o match mais longo pra evitar
+    // ambiguidade (ex: 'sites' deve casar 'sites/connect' antes de 'site...').
+    const matches = VALID_ROUTES.filter((r) => clean === r || clean.startsWith(r + '/'))
+    const matched = matches.sort((a, b) => b.length - a.length)[0]
     const target = (matched ?? 'dashboard') as Route
     setRoute(target)
-    window.history.pushState({}, '', '/' + clean)
+
+    // F-S10 — atualizar sub-state ao navegar pra 'sites/*'.
+    if (target === 'sites') {
+      setSitesState(parseSitesPath('/' + clean))
+    }
+
+    window.history.pushState({}, '', '/' + cleanWithQs)
   }
 
   // Mapa de rota → caminho ativo (pra aria-current no Sidebar)
@@ -100,6 +166,7 @@ export function App() {
     conversoes: '/conversoes',
     integracoes: '/integracoes',
     leads: '/leads',
+    sites: '/sites',
     configuracoes: '/configuracoes',
   }
   const activePath = activePathMap[route]
@@ -198,16 +265,70 @@ export function App() {
                 </AppShell>
               )}
 
-              {/* Leads */}
-              {route === 'leads' && (
-                <AppShell activePath={activePath} onNavigate={navigate}>
-                  <EmptyState
-                    icon={Users}
-                    title="Nenhum lead capturado ainda"
-                    description="Leads com score e canal de origem aparecerão aqui assim que o tracking estiver ativo."
-                    action={{ label: 'Ativar tracking', onClick: () => navigate('integracoes') }}
-                  />
-                </AppShell>
+              {/* Leads — lista + detalhe */}
+              {route === 'leads' && !selectedLeadId && (
+                <LeadsList
+                  onNavigate={navigate}
+                  onSelectLead={(id) => {
+                    setSelectedLeadId(id)
+                    window.history.pushState({}, '', `/leads/${id}`)
+                  }}
+                />
+              )}
+              {route === 'leads' && selectedLeadId && (
+                <LeadDetail
+                  leadId={selectedLeadId}
+                  onNavigate={navigate}
+                  onBack={() => {
+                    setSelectedLeadId(null)
+                    window.history.pushState({}, '', '/leads')
+                  }}
+                />
+              )}
+
+              {/* Sites (F-S10) — lista / connect / detalhe / logs.
+                  Auth guard implícito: resolveInitialRoute() acima já força
+                  'login' se !isAuthenticated, então 'sites' só renderiza
+                  com sessão válida (AC-7). */}
+              {route === 'sites' && sitesState.subpage === 'list' && (
+                <SitesListPage
+                  onNavigate={navigate}
+                  onViewSiteDetails={(site) => {
+                    const id = site.installation_id ?? site.domain
+                    setSitesState({ subpage: 'detail', siteId: id })
+                    window.history.pushState({}, '', `/sites/${encodeURIComponent(id)}`)
+                  }}
+                />
+              )}
+              {route === 'sites' && sitesState.subpage === 'connect' && (
+                <ConnectHostingerPage
+                  onNavigate={navigate}
+                  onCancel={() => {
+                    setSitesState({ subpage: 'list', siteId: null })
+                    window.history.pushState({}, '', '/sites')
+                  }}
+                />
+              )}
+              {route === 'sites' && sitesState.subpage === 'detail' && sitesState.siteId && (
+                <SiteDetailPage
+                  siteId={sitesState.siteId}
+                  onNavigate={navigate}
+                  onBack={() => {
+                    setSitesState({ subpage: 'list', siteId: null })
+                    window.history.pushState({}, '', '/sites')
+                  }}
+                />
+              )}
+              {route === 'sites' && sitesState.subpage === 'logs' && sitesState.siteId && (
+                <SiteAuditLogPage
+                  siteId={sitesState.siteId}
+                  onNavigate={navigate}
+                  onBack={() => {
+                    const id = sitesState.siteId as string
+                    setSitesState({ subpage: 'detail', siteId: id })
+                    window.history.pushState({}, '', `/sites/${encodeURIComponent(id)}`)
+                  }}
+                />
               )}
 
               {/* Configurações */}

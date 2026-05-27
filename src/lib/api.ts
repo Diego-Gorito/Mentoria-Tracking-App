@@ -2,7 +2,7 @@
 // Injeta Bearer JWT em todas as requests autenticadas.
 // TODO: adicionar retry com exponential backoff (Era 2).
 
-import { getToken, clearToken } from './auth'
+import { getToken, getSession, setSession, clearSession } from './auth'
 
 
 // Em dev: API roda em localhost:3000. Em prod: same-origin (Easypanel routing).
@@ -12,14 +12,40 @@ const WORKER_BASE =
     ? 'http://localhost:3000'
     : ''
 
+/** Calls /api/auth/refresh with current refresh_token. Updates session if success. Returns new access_token or null. */
+async function refreshSession(): Promise<string | null> {
+  const session = getSession()
+  if (!session?.refresh_token) return null
+  try {
+    const res = await fetch(`${WORKER_BASE}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: session.refresh_token }),
+    })
+    if (!res.ok) return null
+    const data = await res.json() as { access_token: string; refresh_token: string; expires_in: number }
+    const newSession = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
+    }
+    setSession(newSession)
+    return data.access_token
+  } catch {
+    return null
+  }
+}
+
 type FetchOptions = Omit<RequestInit, 'headers'> & {
   headers?: Record<string, string>
   /** Se true: não injeta Authorization (pra rotas públicas como login/signup) */
   public?: boolean
+  /** Internal: set true on retry-after-refresh to prevent infinite loop */
+  _retry?: boolean
 }
 
 async function request<T>(path: string, opts: FetchOptions = {}): Promise<T> {
-  const { public: isPublic, headers = {}, ...rest } = opts
+  const { public: isPublic, _retry, headers = {}, ...rest } = opts
 
   const token = getToken()
   const authHeader: Record<string, string> =
@@ -34,9 +60,13 @@ async function request<T>(path: string, opts: FetchOptions = {}): Promise<T> {
     },
   })
 
-  // 401 → limpa token e recarrega pra tela de login
-  if (res.status === 401) {
-    clearToken()
+  // 401 → tenta refresh 1x; se falhar, limpa sessão e redireciona login
+  if (res.status === 401 && !_retry) {
+    const newToken = await refreshSession()
+    if (newToken) {
+      return request<T>(path, { ...opts, _retry: true })
+    }
+    clearSession()
     window.location.href = '/login'
     throw new Error('Unauthorized')
   }
@@ -51,16 +81,25 @@ async function request<T>(path: string, opts: FetchOptions = {}): Promise<T> {
   return res.json() as Promise<T>
 }
 
-// Tipo de resposta auth (signup e login retornam mesma shape)
-export type AuthResponse = {
+// Signup response (no token — user logs in separately after signup)
+export type SignupResponse = {
   user_id: string
   email: string
   tenant_slug: string | null
-  tenant_name: string | null
-  role: string | null
-  onboarding_step: number
-  token: string
+  tenant_id: string | null
 }
+
+// Login response (Supabase session format)
+export type LoginResponse = {
+  access_token: string
+  refresh_token: string
+  expires_in: number
+  token_type: 'bearer'
+  user: { user_id: string; email: string }
+}
+
+/** @deprecated use SignupResponse or LoginResponse */
+export type AuthResponse = SignupResponse
 
 export type MeResponse = {
   user_id: string
@@ -76,14 +115,14 @@ export type MeResponse = {
 
 export const authApi = {
   signup: (body: { email: string; password: string; name: string; tenant_slug?: string }) =>
-    request<AuthResponse>('/api/auth/signup', {
+    request<SignupResponse>('/api/auth/signup', {
       method: 'POST',
       body: JSON.stringify(body),
       public: true,
     }),
 
   login: (email: string, password: string) =>
-    request<AuthResponse>('/api/auth/login', {
+    request<LoginResponse>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
       public: true,
@@ -93,6 +132,16 @@ export const authApi = {
     request<{ sent: boolean }>('/api/auth/magic-link', {
       method: 'POST',
       body: JSON.stringify({ email }),
+      public: true,
+    }),
+
+  logout: () =>
+    request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+
+  refresh: (refresh_token: string) =>
+    request<LoginResponse>('/api/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token }),
       public: true,
     }),
 

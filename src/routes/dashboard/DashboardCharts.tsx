@@ -97,7 +97,7 @@ function FunnelChart({ period }: { period: Period }) {
             <Legend wrapperStyle={{ fontSize: 11, color: COLORS.axis }} />
             <Line type="monotone" dataKey="leads" name="Leads" stroke={COLORS.leads} dot={false} strokeWidth={2} />
             <Line type="monotone" dataKey="mql" name="MQL" stroke={COLORS.mql} dot={false} strokeWidth={2} />
-            <Line type="monotone" dataKey="conversions" name="Conversoes" stroke={COLORS.conversions} dot={false} strokeWidth={2} />
+            <Line type="monotone" dataKey="conversions" name="Conversões" stroke={COLORS.conversions} dot={false} strokeWidth={2} />
           </LineChart>
         </ResponsiveContainer>
       )}
@@ -172,7 +172,7 @@ function ChannelsChart({ period }: { period: Period }) {
             <YAxis tick={{ fill: COLORS.axis, fontSize: 10 }} tickLine={false} axisLine={false} width={32} />
             <Tooltip content={<DarkTooltip />} />
             <Legend wrapperStyle={{ fontSize: 11, color: COLORS.axis }} />
-            <Area type="monotone" dataKey="organic"  name="Organico" stackId="1" stroke={COLORS.organic}  fill={COLORS.organic}  fillOpacity={0.25} />
+            <Area type="monotone" dataKey="organic"  name="Orgânico" stackId="1" stroke={COLORS.organic}  fill={COLORS.organic}  fillOpacity={0.25} />
             <Area type="monotone" dataKey="meta"     name="Meta"     stackId="1" stroke={COLORS.meta}     fill={COLORS.meta}     fillOpacity={0.25} />
             <Area type="monotone" dataKey="google"   name="Google"   stackId="1" stroke={COLORS.google}   fill={COLORS.google}   fillOpacity={0.25} />
             <Area type="monotone" dataKey="hotmart"  name="Hotmart"  stackId="1" stroke={COLORS.hotmart}  fill={COLORS.hotmart}  fillOpacity={0.25} />

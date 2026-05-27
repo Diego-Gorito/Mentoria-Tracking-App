@@ -1,5 +1,7 @@
-// Definição canônica dos 6 menu items do Tracking App.
+// Definição canônica dos 7 menu items do Tracking App.
 // Fonte de verdade pra Sidebar desktop, MobileSidebar e breadcrumbs futuros.
+// F-S10 (2026-05-26): nova entrada "Sites Conectados" inserida entre Leads e
+// Configurações per UX §2.1 + UX-001 (auto-provisioner GTM flow).
 
 import {
   ChartLine,
@@ -7,6 +9,7 @@ import {
   Target,
   Plugs,
   Users,
+  GlobeHemisphereWest,
   Gear,
 } from '@phosphor-icons/react'
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
@@ -62,6 +65,18 @@ export const MENU_ITEMS: MenuItem[] = [
     path: '/leads',
     badge: null,
     description: 'Leads quentes com score e canal de origem',
+  },
+  {
+    // F-S10 AC-5 — entrada "Sites Conectados" entre Leads e Configurações
+    // (per UX §2.1 + UX-001: "Sites Conectados nível 1 do menu pra dar
+    // visibilidade ao estado conectado/não-conectado"). Posição = penúltimo
+    // pra manter Configurações no final como bottom utility.
+    id: 'sites',
+    label: 'Sites Conectados',
+    icon: GlobeHemisphereWest,
+    path: '/sites',
+    badge: null,
+    description: 'Sites WordPress conectados via Hostinger com tracking GTM instalado',
   },
   {
     id: 'configuracoes',

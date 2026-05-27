@@ -4,6 +4,7 @@
 
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ErrorState } from '@/components/ui/ErrorState'
 import { Users, Pulse } from '@phosphor-icons/react'
 import { useAnalyticsLeadsRecent, useAnalyticsDispatchesFailed } from '@/hooks/useAnalytics'
 import type { LeadRecent, DispatchFailed } from '@/hooks/useAnalytics'
@@ -30,7 +31,7 @@ function sourceLabelPt(source: string): string {
     instagram: 'Meta Ads',
     google: 'Google',
     hotmart: 'Hotmart',
-    organic: 'Organico',
+    organic: 'Orgânico',
     direto: 'Direto',
     direct: 'Direto',
     chatwoot: 'Chatwoot',
@@ -102,7 +103,7 @@ const TD = 'px-6 py-3 text-body-sm text-fg-on-dark border-t border-white/[0.04]'
 // --- Leads recentes ---
 
 function LeadsTable() {
-  const { data, loading } = useAnalyticsLeadsRecent(20)
+  const { data, loading, error } = useAnalyticsLeadsRecent(20)
   const leads: LeadRecent[] = data?.data ?? []
 
   return (
@@ -112,14 +113,25 @@ function LeadsTable() {
           <tr className="bg-white/[0.02]">
             <th scope="col" className={TH}>Lead</th>
             <th scope="col" className={TH}>Score</th>
-            <th scope="col" className={TH}>Ultimo evento</th>
+            <th scope="col" className={TH}>Último evento</th>
             <th scope="col" className={TH}>Origem</th>
           </tr>
         </thead>
         <tbody>
           {loading && Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={4} />)}
 
-          {!loading && leads.length === 0 && (
+          {!loading && error && (
+            <tr>
+              <td colSpan={4} className="px-6 py-4 border-t border-white/[0.04]">
+                <ErrorState
+                  message={`Falha ao carregar leads: ${error}`}
+                  onRetry={() => window.location.reload()}
+                />
+              </td>
+            </tr>
+          )}
+
+          {!loading && !error && leads.length === 0 && (
             <tr>
               <td colSpan={4} className="px-6 py-8 border-t border-white/[0.04]">
                 <EmptyState
@@ -132,7 +144,7 @@ function LeadsTable() {
             </tr>
           )}
 
-          {!loading && leads.map((l) => (
+          {!loading && !error && leads.map((l) => (
             <tr key={l.lead_id} className="hover:bg-white/[0.03] transition-colors">
               <td className={TD}>
                 <div className="flex flex-col">
@@ -156,7 +168,7 @@ function LeadsTable() {
 // --- Dispatches em falha ---
 
 function DispatchesTable() {
-  const { data, loading } = useAnalyticsDispatchesFailed(20)
+  const { data, loading, error } = useAnalyticsDispatchesFailed(20)
   const dispatches: DispatchFailed[] = data?.data ?? []
 
   return (
@@ -167,27 +179,38 @@ function DispatchesTable() {
             <th scope="col" className={TH}>Provider</th>
             <th scope="col" className={TH}>Conversion</th>
             <th scope="col" className={TH}>Tentativas</th>
-            <th scope="col" className={TH}>Ultimo erro</th>
+            <th scope="col" className={TH}>Último erro</th>
             <th scope="col" className={TH}>Tentativa</th>
           </tr>
         </thead>
         <tbody>
           {loading && Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} cols={5} />)}
 
-          {!loading && dispatches.length === 0 && (
+          {!loading && error && (
+            <tr>
+              <td colSpan={5} className="px-6 py-4 border-t border-white/[0.04]">
+                <ErrorState
+                  message={`Falha ao carregar dispatches: ${error}`}
+                  onRetry={() => window.location.reload()}
+                />
+              </td>
+            </tr>
+          )}
+
+          {!loading && !error && dispatches.length === 0 && (
             <tr>
               <td colSpan={5} className="px-6 py-8 border-t border-white/[0.04]">
                 <EmptyState
                   icon={Pulse}
-                  title="Sem falhas — otimo!"
-                  description="Nenhum dispatch com 3+ retries nas ultimas 24h."
+                  title="Sem falhas — ótimo!"
+                  description="Nenhum dispatch com 3+ retries nas últimas 24h."
                   className="py-4"
                 />
               </td>
             </tr>
           )}
 
-          {!loading && dispatches.map((d) => (
+          {!loading && !error && dispatches.map((d) => (
             <tr key={d.dispatch_id} className="hover:bg-white/[0.03] transition-colors">
               <td className={TD}>{platformLabel(d.platform)}</td>
               <td className={`${TD} font-mono text-caption text-fg-on-dark-muted`}>

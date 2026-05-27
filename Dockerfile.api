@@ -30,6 +30,11 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
 
 ENV PORT=3000 \
     NODE_ENV=production
+# Env vars Supabase (setar no Easypanel tracking-api via compose.yml ou painel):
+#   SUPABASE_URL=https://<project_ref>.supabase.co
+#   SUPABASE_ANON_KEY=<anon_key>
+#   SUPABASE_SERVICE_ROLE_KEY=<service_role_key>
+# Removidos (Fase 3 — ADR-0007 v1.2): DATABASE_URL (KV2), JWT_SECRET (HS256 custom)
 
 # tsx executa TypeScript direto sem compilação — adequado pra MVP
 CMD ["npx", "tsx", "workers/api/index.ts"]

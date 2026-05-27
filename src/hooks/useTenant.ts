@@ -16,11 +16,11 @@ export function useTenant(): { tenant: TenantInfo | null; loading: boolean } {
 
   useEffect(() => {
     const user: AuthUser | null = getUser()
-    if (user) {
+    if (user && user.tenantId) {
       setTenant({
         tenantId: user.tenantId,
-        slug: user.tenantSlug,
-        name: user.tenantName,
+        slug: user.tenantSlug ?? '',
+        name: user.tenantName ?? '',
       })
     }
     setLoading(false)

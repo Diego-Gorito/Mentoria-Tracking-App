@@ -1,6 +1,7 @@
-// IntegrationModal — form especifico por plataforma + testar conexao + salvar
-// Reusa Field/Button/Toast. Focus trap + Esc. Mock: localStorage[platform_id_status].
-// Wrapper aplica guard; body recebe id+meta nao-null (TS narrowing limpo).
+// IntegrationModal — form por plataforma + testar conexão + salvar via credentialsApi.
+// Valores de campo armazenados em localStorage apenas como cache local de UX.
+// Status persistido no backend via /api/credentials/:tenantId (upsert).
+// Wrapper aplica guard; body recebe id+meta não-null (TS narrowing limpo).
 
 import { useEffect, useRef, useState, useId } from 'react'
 import { Button } from '@/components/ui/Button'
@@ -10,6 +11,8 @@ import { useFocusTrap } from '@/lib/useFocusTrap'
 import { X, ClipboardText, Question } from '@phosphor-icons/react'
 import type { PlatformId, PlatformMeta } from './platforms'
 import { PLATFORM_META } from './platforms'
+import { credentialsApi } from '@/lib/api'
+import { useTenant } from '@/hooks/useTenant'
 
 type Props = {
   platformId: PlatformId | null
@@ -34,6 +37,7 @@ function ModalBody({ platformId, meta, onClose, onSaved }: BodyProps) {
   const ref = useRef<HTMLDivElement>(null)
   const uid = useId()
   const { toast } = useToast()
+  const { tenant } = useTenant()
   useFocusTrap(ref, true, onClose)
 
   const [values, setValues] = useState<Record<string, string>>(() => {
@@ -71,16 +75,21 @@ function ModalBody({ platformId, meta, onClose, onSaved }: BodyProps) {
   }
 
   async function handleTest() {
+    if (!tenant?.tenantId) {
+      toast('Tenant não identificado. Faça login novamente.', 'error')
+      return
+    }
     setTesting(true)
     try {
-      await new Promise((r) => setTimeout(r, 1500))
-      // Mock: ~67% sucesso (baseado em length % 3)
-      const success = platformId.length % 3 !== 0
-      if (success) {
-        toast('Conexao OK! Credenciais validadas.', 'success')
+      const result = await credentialsApi.testConnection(platformId, tenant.tenantId)
+      if (result.ok) {
+        toast('Conexão OK! Credenciais validadas.', 'success')
       } else {
-        toast('Erro na conexao. Verifique os tokens.', 'error', 5000)
+        toast(result.message ?? 'Erro na conexão. Verifique os tokens.', 'error', 5000)
       }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao testar conexão'
+      toast(msg, 'error', 5000)
     } finally {
       setTesting(false)
     }
@@ -94,18 +103,36 @@ function ModalBody({ platformId, meta, onClose, onSaved }: BodyProps) {
     }
     setSaving(true)
     try {
-      await new Promise((r) => setTimeout(r, 600))
+      // Persistir cache local dos valores do form (não-sensível: apenas UX convenience)
       for (const f of meta.fields) {
-        if (values[f.key]) {
+        if (values[f.key] && !f.secret) {
           localStorage.setItem(`mentoria-tracking.cred.${platformId}.${f.key}`, values[f.key])
         }
       }
+
+      // Upsert via backend (campos secretos nunca ficam em localStorage)
+      if (tenant?.tenantId) {
+        const primaryField = meta.fields.find((f) => f.required && f.secret) ?? meta.fields[0]
+        const extraConfig: Record<string, string> = {}
+        for (const f of meta.fields) {
+          if (f.key !== primaryField.key && values[f.key]) {
+            extraConfig[f.key] = values[f.key]
+          }
+        }
+        await credentialsApi.upsert(tenant.tenantId, {
+          providerId: platformId,
+          value: values[primaryField.key] ?? '',
+          extraConfig,
+        })
+      }
+
       const status: 'configured_not_validated' = 'configured_not_validated'
-      localStorage.setItem(`mentoria-tracking.cred.${platformId}.status`, status)
-      localStorage.setItem(`mentoria-tracking.cred.${platformId}.last_validated`, new Date().toISOString())
-      toast(`${meta.label} configurado! Lembre de testar a conexao.`, 'success')
+      toast(`${meta.label} configurado! Lembre de testar a conexão.`, 'success')
       onSaved(platformId, status)
       onClose()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao salvar credencial'
+      toast(msg, 'error', 5000)
     } finally {
       setSaving(false)
     }
@@ -198,7 +225,7 @@ function ModalBody({ platformId, meta, onClose, onSaved }: BodyProps) {
                   className="mt-2 p-3 rounded-md border text-body-sm text-fg-on-dark-muted"
                   style={{ background: 'var(--app-pill-bg)', borderColor: 'var(--app-pill-border)' }}
                   role="region"
-                  aria-label={`Instrucoes ${f.label}`}
+                  aria-label={`Instruções ${f.label}`}
                 >
                   <p className="whitespace-pre-line">{f.help}</p>
                   <div className="mt-2 h-24 rounded bg-white/[0.03] border border-dashed border-white/10 flex items-center justify-center text-caption text-fg-on-dark-subtle">
@@ -216,7 +243,7 @@ function ModalBody({ platformId, meta, onClose, onSaved }: BodyProps) {
           style={{ borderColor: 'var(--app-card-border)' }}
         >
           <Button variant="ghost" onClick={handleTest} loading={testing} disabled={testing || saving}>
-            Testar conexao
+            Testar conexão
           </Button>
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={onClose} disabled={saving}>Cancelar</Button>

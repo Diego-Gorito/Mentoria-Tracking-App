@@ -1,5 +1,5 @@
 // MagicLink — Mentoria Tracking App
-// Form simples: email -> submit mock -> tela de confirmacao com cooldown 30s
+// Form simples: email -> authApi.magicLink -> tela de confirmacao com cooldown 30s
 // WCAG AA: labels, aria-live no estado enviado, focus visivel
 // Reusa Field + Button + Toast
 
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
 import { EnvelopeOpen } from '@phosphor-icons/react'
+import { authApi } from '@/lib/api'
 
 const COOLDOWN_SECONDS = 30
 
@@ -47,13 +48,13 @@ export function MagicLink({ onGoLogin }: Props) {
 
     setLoading(true)
     try {
-      // Mock: simula POST /api/auth/magic-link
-      // eslint-disable-next-line no-console
-      console.log('[MagicLink] mock send to:', email)
-      await new Promise((r) => setTimeout(r, 700))
-      toast(`Link enviado pra ${email}! Verifique sua caixa de entrada (valido por 15min)`, 'success', 6000)
+      await authApi.magicLink(email)
+      toast(`Verifique seu e-mail — link enviado para ${email} (valido por 15min)`, 'success', 6000)
       setSent(true)
       setCooldown(COOLDOWN_SECONDS)
+    } catch {
+      // Nao expor se email existe ou nao (privacidade)
+      toast('Nao foi possivel enviar o link. Tente novamente em instantes.', 'error', 6000)
     } finally {
       setLoading(false)
     }
@@ -63,11 +64,11 @@ export function MagicLink({ onGoLogin }: Props) {
     if (cooldown > 0) return
     setLoading(true)
     try {
-      // eslint-disable-next-line no-console
-      console.log('[MagicLink] mock resend to:', email)
-      await new Promise((r) => setTimeout(r, 500))
+      await authApi.magicLink(email)
       toast(`Novo link enviado pra ${email}`, 'success')
       setCooldown(COOLDOWN_SECONDS)
+    } catch {
+      toast('Nao foi possivel reenviar. Tente novamente.', 'error', 5000)
     } finally {
       setLoading(false)
     }

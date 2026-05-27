@@ -1,33 +1,20 @@
-// Integrations — Grid 6 cards de plataforma + modal por plataforma
-// Status persistido em localStorage (mock pre-backend).
-// Reusa StatusBadge + Button + IntegrationModal.
+// Integrations — Grid 6 cards de plataforma + modal por plataforma.
+// Status persistido via /api/credentials/:tenantId (backend real).
+// Fallback gracioso: se backend indisponível, mostra status 'not_configured' com erro.
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { StatusBadge } from '@/components/ui/StatusBadge'
+import { ErrorState } from '@/components/ui/ErrorState'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { IntegrationModal } from './IntegrationModal'
 import { PLATFORM_META, PLATFORM_ORDER, type PlatformId } from './platforms'
+import { useCredentials } from '@/hooks/useCredentials'
+import { useTenant } from '@/hooks/useTenant'
+import { credentialsApi } from '@/lib/api'
 
 type Status = 'not_configured' | 'configured_not_validated' | 'configured_validated' | 'error'
-
-type CardState = {
-  status: Status
-  lastValidated: string | null
-}
-
-function loadState(): Record<PlatformId, CardState> {
-  const result = {} as Record<PlatformId, CardState>
-  for (const id of PLATFORM_ORDER) {
-    const s = (localStorage.getItem(`mentoria-tracking.cred.${id}.status`) as Status | null) ?? 'not_configured'
-    result[id] = {
-      status: s,
-      lastValidated: localStorage.getItem(`mentoria-tracking.cred.${id}.last_validated`),
-    }
-  }
-  return result
-}
 
 function statusVariant(s: Status): 'success' | 'info' | 'warning' | 'danger' | 'neutral' {
   switch (s) {
@@ -43,7 +30,7 @@ function statusLabel(s: Status): string {
     case 'configured_validated': return 'Validado'
     case 'configured_not_validated': return 'Configurado'
     case 'error': return 'Erro'
-    default: return 'Nao configurado'
+    default: return 'Não configurado'
   }
 }
 
@@ -52,9 +39,9 @@ function formatRelative(iso: string | null): string {
   const date = new Date(iso)
   const mins = Math.floor((Date.now() - date.getTime()) / 60000)
   if (mins < 1) return 'agora'
-  if (mins < 60) return `ha ${mins}min`
+  if (mins < 60) return `há ${mins}min`
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `ha ${hours}h`
+  if (hours < 24) return `há ${hours}h`
   return date.toLocaleDateString('pt-BR')
 }
 
@@ -64,56 +51,86 @@ type Props = {
 
 export function Integrations({ onNavigate }: Props) {
   const { toast } = useToast()
-  const [state, setState] = useState<Record<PlatformId, CardState>>(() => loadState())
+  const { tenant } = useTenant()
+  const { credentials, loading: credsLoading, error: credsError, refresh } = useCredentials()
   const [openPlatform, setOpenPlatform] = useState<PlatformId | null>(null)
   const [testingId, setTestingId] = useState<PlatformId | null>(null)
 
-  // Re-sync state quando modal fecha (refletir mudanca persistida)
-  useEffect(() => {
-    if (openPlatform === null) setState(loadState())
-  }, [openPlatform])
+  // Helpers para acessar status de uma plataforma
+  function credFor(id: PlatformId) {
+    return credentials.find((c) => c.providerId === id)
+  }
+
+  function getStatus(id: PlatformId): Status {
+    return credFor(id)?.status ?? 'not_configured'
+  }
+
+  function getLastValidated(id: PlatformId): string | null {
+    return credFor(id)?.lastValidatedAt ?? null
+  }
 
   async function handleTest(id: PlatformId) {
+    if (!tenant?.tenantId) {
+      toast('Tenant não identificado. Faça login novamente.', 'error')
+      return
+    }
     setTestingId(id)
     try {
-      await new Promise((r) => setTimeout(r, 1500))
-      const success = id.length % 3 !== 0
-      const newStatus: Status = success ? 'configured_validated' : 'error'
-      localStorage.setItem(`mentoria-tracking.cred.${id}.status`, newStatus)
-      const now = new Date().toISOString()
-      localStorage.setItem(`mentoria-tracking.cred.${id}.last_validated`, now)
-      setState((s) => ({ ...s, [id]: { status: newStatus, lastValidated: now } }))
-      if (success) {
-        toast(`${PLATFORM_META[id].label}: conexao OK!`, 'success')
+      const result = await credentialsApi.testConnection(id, tenant.tenantId)
+      if (result.ok) {
+        toast(`${PLATFORM_META[id].label}: conexão OK!`, 'success')
       } else {
-        toast(`${PLATFORM_META[id].label}: erro na conexao. Verifique os tokens.`, 'error', 5000)
+        toast(
+          `${PLATFORM_META[id].label}: ${result.message ?? 'erro na conexão. Verifique os tokens.'}`,
+          'error',
+          5000,
+        )
       }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao testar conexão'
+      toast(`${PLATFORM_META[id].label}: ${msg}`, 'error', 5000)
     } finally {
       setTestingId(null)
+      // Refresh status após teste (backend pode ter atualizado)
+      refresh()
     }
   }
 
-  function handleSaved(id: PlatformId, status: 'configured_not_validated' | 'configured_validated') {
-    setState((s) => ({ ...s, [id]: { status, lastValidated: new Date().toISOString() } }))
+  function handleSaved(_id: PlatformId, _status: 'configured_not_validated' | 'configured_validated') {
+    // Refresh credenciais do backend após salvar no modal
+    refresh()
   }
 
   return (
     <AppShell activePath="/integracoes" onNavigate={onNavigate}>
       <div className="max-w-5xl">
         <div className="mb-6">
-          <h1 className="text-h2 font-semibold text-fg-on-dark">Integracoes</h1>
+          <h1 className="text-h2 font-semibold text-fg-on-dark">Integrações</h1>
           <p className="text-body-md text-fg-on-dark-muted mt-1">
-            Conecte plataformas de ads, conversao e atendimento. Cole 3 tokens, veja ROAS amanha.
+            Conecte plataformas de ads, conversão e atendimento. Cole 3 tokens, veja ROAS amanhã.
           </p>
         </div>
+
+        {/* Erro ao carregar credenciais — não bloqueia UI, só alerta */}
+        {credsError && (
+          <div
+            className="rounded-xl border mb-4"
+            style={{ background: 'var(--app-card-bg)', borderColor: 'var(--app-card-border)' }}
+          >
+            <ErrorState
+              message={`Não foi possível carregar status das integrações: ${credsError}`}
+              onRetry={refresh}
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {PLATFORM_ORDER.map((id) => {
             const meta = PLATFORM_META[id]
-            const card = state[id]
+            const status = getStatus(id)
+            const lastValidated = getLastValidated(id)
             const configured =
-              card.status === 'configured_validated' ||
-              card.status === 'configured_not_validated'
+              status === 'configured_validated' || status === 'configured_not_validated'
 
             return (
               <article
@@ -127,7 +144,10 @@ export function Integrations({ onNavigate }: Props) {
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="text-2xl shrink-0" aria-hidden="true">{meta.emoji}</span>
                     <div className="min-w-0">
-                      <h3 id={`platform-${id}-title`} className="text-heading-sm font-semibold text-fg-on-dark truncate">
+                      <h3
+                        id={`platform-${id}-title`}
+                        className="text-heading-sm font-semibold text-fg-on-dark truncate"
+                      >
                         {meta.label}
                       </h3>
                       <p className="text-body-sm text-fg-on-dark-muted leading-snug">
@@ -135,14 +155,22 @@ export function Integrations({ onNavigate }: Props) {
                       </p>
                     </div>
                   </div>
-                  <StatusBadge status={statusVariant(card.status)}>
-                    {statusLabel(card.status)}
-                  </StatusBadge>
+                  {/* Skeleton de status enquanto carrega */}
+                  {credsLoading ? (
+                    <div className="h-5 w-20 rounded-full bg-white/[0.06] animate-pulse" />
+                  ) : (
+                    <StatusBadge status={statusVariant(status)}>
+                      {statusLabel(status)}
+                    </StatusBadge>
+                  )}
                 </div>
 
                 {/* Meta info */}
                 <div className="flex items-center gap-3 text-caption text-fg-on-dark-subtle">
-                  <span>Ultima validacao: <span className="font-mono">{formatRelative(card.lastValidated)}</span></span>
+                  <span>
+                    Última validação:{' '}
+                    <span className="font-mono">{formatRelative(lastValidated)}</span>
+                  </span>
                 </div>
 
                 {/* Actions */}
@@ -160,9 +188,9 @@ export function Integrations({ onNavigate }: Props) {
                       size="sm"
                       onClick={() => handleTest(id)}
                       loading={testingId === id}
-                      disabled={testingId !== null}
+                      disabled={testingId !== null || credsLoading}
                     >
-                      Testar conexao
+                      Testar conexão
                     </Button>
                   )}
                   <a
@@ -182,7 +210,10 @@ export function Integrations({ onNavigate }: Props) {
 
       <IntegrationModal
         platformId={openPlatform}
-        onClose={() => setOpenPlatform(null)}
+        onClose={() => {
+          setOpenPlatform(null)
+          refresh()
+        }}
         onSaved={handleSaved}
       />
     </AppShell>
