@@ -447,7 +447,7 @@ export class GtmApiClient {
     );
     let vCount = 0;
     for (const v of variables) {
-      const remapped = remapVariableType(v, idMap.templates);
+      const remapped = remapVariableType(v, idMap.templates, targetContainerId);
       const cleaned = stripIds(remapped, 'variableId');
       const created = await this.createVariable(
         targetAccountId,
@@ -494,7 +494,7 @@ export class GtmApiClient {
     );
     let cCount = 0;
     for (const c of clients) {
-      const remapped = remapClientType(c, idMap.templates);
+      const remapped = remapClientType(c, idMap.templates, targetContainerId);
       const cleaned = stripIds(remapped, 'clientId') as GtmClient;
       const created = await this.createClient(
         targetAccountId,
@@ -518,7 +518,7 @@ export class GtmApiClient {
     );
     let tagCount = 0;
     for (const t of tags) {
-      const remapped = remapTagRefs(t, idMap);
+      const remapped = remapTagRefs(t, idMap, targetContainerId);
       const cleaned = stripIds(remapped, 'tagId') as GtmTag;
       await this.createTag(
         targetAccountId,
@@ -576,10 +576,19 @@ function stripIds<T extends object>(entity: T, ...idFields: (keyof T | string)[]
 
 /**
  * Variable type pode ser `cvt_{containerId}_{templateId}` referenciando custom
- * template. Quando clonamos pra novo container, esse type fica inválido.
- * Reescreve pra `cvt_{newContainerId}_{newTemplateId}` se mapping existe.
+ * template. Quando clonamos pra novo container, esse type fica inválido pois
+ * GTM rejeita "Unknown entity type" — o cvt_ precisa apontar pro NOVO container.
+ *
+ * Reescreve pra `cvt_{targetContainerId}_{newTemplateId}` se mapping existe.
+ * Gallery templates (formato `cvt_GALLERYID` sem container) ficam intactos.
+ *
+ * FIX 2026-05-28: antes mantinha parts[1] (source containerId), GTM 400.
  */
-function remapVariableType(v: GtmVariable, templateMap: Map<string, string>): GtmVariable {
+function remapVariableType(
+  v: GtmVariable,
+  templateMap: Map<string, string>,
+  targetContainerId: string,
+): GtmVariable {
   if (!v.type.startsWith('cvt_')) return v;
   const parts = v.type.split('_');
   // formato esperado: cvt_{containerId}_{templateId} OR cvt_{galleryId} (gallery)
@@ -587,20 +596,21 @@ function remapVariableType(v: GtmVariable, templateMap: Map<string, string>): Gt
   const sourceTemplateId = parts[2];
   const targetTemplateId = templateMap.get(sourceTemplateId);
   if (!targetTemplateId) return v;
-  // parts[1] é containerId — substituímos pelo target. Caller passa containerId mas
-  // como type é só string, deixamos o caller corrigir via post-process se necessário.
-  // MVP: assume mesmo formato; remap só templateId.
-  return { ...v, type: `${parts[0]}_${parts[1]}_${targetTemplateId}` };
+  return { ...v, type: `cvt_${targetContainerId}_${targetTemplateId}` };
 }
 
-function remapClientType(c: GtmClient, templateMap: Map<string, string>): GtmClient {
+function remapClientType(
+  c: GtmClient,
+  templateMap: Map<string, string>,
+  targetContainerId: string,
+): GtmClient {
   if (!c.type.startsWith('cvt_')) return c;
   const parts = c.type.split('_');
   if (parts.length !== 3) return c;
   const sourceTemplateId = parts[2];
   const targetTemplateId = templateMap.get(sourceTemplateId);
   if (!targetTemplateId) return c;
-  return { ...c, type: `${parts[0]}_${parts[1]}_${targetTemplateId}` };
+  return { ...c, type: `cvt_${targetContainerId}_${targetTemplateId}` };
 }
 
 /**
@@ -610,7 +620,11 @@ function remapClientType(c: GtmClient, templateMap: Map<string, string>): GtmCli
  *  - type (cvt_X se custom template)
  *  - parameter[] pode ter `tagReference` apontando outras tags (não tratado no MVP)
  */
-function remapTagRefs(t: GtmTag, idMap: CloneResult['idMap']): GtmTag {
+function remapTagRefs(
+  t: GtmTag,
+  idMap: CloneResult['idMap'],
+  targetContainerId: string,
+): GtmTag {
   const remapTriggerIds = (arr?: string[]) =>
     arr?.map((id) => idMap.triggers.get(id) ?? id);
 
@@ -619,7 +633,7 @@ function remapTagRefs(t: GtmTag, idMap: CloneResult['idMap']): GtmTag {
     const parts = type.split('_');
     if (parts.length === 3) {
       const target = idMap.templates.get(parts[2]);
-      if (target) type = `${parts[0]}_${parts[1]}_${target}`;
+      if (target) type = `cvt_${targetContainerId}_${target}`;
     }
   }
 
