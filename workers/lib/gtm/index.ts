@@ -18,6 +18,14 @@ export {
 export { GtmApiClient, getGtmClient, _resetGtmClient } from './client';
 export type { GtmApiClientOpts } from './client';
 
+export { republishTenantContainer, RepublishLockError } from './republish';
+export type {
+  RepublishInput,
+  RepublishResult,
+  RepublishDeps,
+  SyncCounts,
+} from './republish';
+
 export {
   GtmApiError,
   GtmAuthError,

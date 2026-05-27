@@ -24,6 +24,8 @@ import { getRedis } from '../lib/redis';
 import { getGtmClient, GtmAuthError, GtmQuotaExceededError } from '../lib/gtm';
 import { provisionTenantContainer, ProvisionLockError } from '../lib/gtm/provision';
 import type { ProvisionInput } from '../lib/gtm/provision';
+import { republishTenantContainer, RepublishLockError } from '../lib/gtm/republish';
+import type { RepublishInput } from '../lib/gtm/republish';
 
 // ─── Zod schemas ──────────────────────────────────────────────────────────────
 
@@ -189,6 +191,63 @@ export function createGtmRouter(): Hono<{ Variables: GtmVars }> {
     }
 
     return c.json(container, 200);
+  });
+
+  // POST /republish/:tenant_slug — diff sync master vN → tenant
+  app.post('/republish/:tenant_slug', async (c) => {
+    const ctx = getAuthCtx(c);
+    const slug = c.req.param('tenant_slug');
+    const requestId = c.get('requestId') ?? c.req.header('x-request-id') ?? '';
+
+    const { data: tenant } = await supabaseAdmin
+      .schema('core')
+      .from('tenants')
+      .select('id, slug')
+      .eq('slug', slug)
+      .maybeSingle();
+    if (!tenant) throw new HttpError(404, 'TENANT_NOT_FOUND', `Tenant ${slug} não existe`);
+
+    // Authz: só gestor/app_admin
+    const { data: link } = await supabaseAdmin
+      .schema('core')
+      .from('tenant_users')
+      .select('role')
+      .eq('tenant_id', tenant.id)
+      .eq('user_id', ctx.userId)
+      .eq('status', 'active')
+      .maybeSingle();
+    if (!link || !['gestor', 'app_admin'].includes(link.role)) {
+      throw new HttpError(403, 'NOT_TENANT_ADMIN', 'User não é gestor/app_admin desse tenant');
+    }
+
+    // Optional body: { autoPublish?: boolean }
+    const body = await c.req.json().catch(() => ({}));
+    const input: RepublishInput = {
+      tenant_id: tenant.id,
+      tenant_slug: tenant.slug,
+      request_id: requestId,
+      autoPublish: body?.autoPublish !== false,
+    };
+
+    try {
+      const result = await republishTenantContainer(input, {
+        gtmClient: getGtmClient(),
+        supabase: supabaseAdmin,
+        redis: getRedis(),
+      });
+      return c.json(result, 200);
+    } catch (err) {
+      if (err instanceof RepublishLockError) {
+        throw new HttpError(409, 'REPUBLISH_IN_PROGRESS', err.message);
+      }
+      if (err instanceof GtmQuotaExceededError) {
+        throw new HttpError(503, 'GTM_QUOTA_EXCEEDED', 'GTM API quota diária atingida. Tente amanhã.');
+      }
+      if (err instanceof GtmAuthError) {
+        throw new HttpError(500, 'GTM_AUTH_ERROR', 'Service Account GTM key inválida ou sem permissão');
+      }
+      throw err;
+    }
   });
 
   // GET /master-versions — list available master versions
