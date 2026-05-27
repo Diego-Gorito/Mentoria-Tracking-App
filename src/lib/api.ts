@@ -378,3 +378,76 @@ export const onboardingApi = {
       body: JSON.stringify({}),
     }),
 }
+
+// ─── GTM Container provisioning (ADR-0009 / F-S22 / F-S25) ───────────────────
+
+export const gtmApi = {
+  /** Status do container do tenant atual. */
+  getStatus: (tenantSlug: string) =>
+    request<{
+      status?: string
+      sgtm_url?: string | null
+      web_container_public_id?: string | null
+      web_container_internal_id?: string | null
+      server_container_public_id?: string | null
+      server_container_internal_id?: string | null
+      created_at?: string | null
+      last_published_at?: string | null
+      failed_at_step?: string | null
+      error_message?: string | null
+      master_version?: { version_name: string; snapshot_at: string }
+      tenant_id?: string
+    }>(`/api/gtm/tenant-container/${encodeURIComponent(tenantSlug)}`),
+
+  listMasterVersions: () =>
+    request<{
+      versions: Array<{
+        id: string
+        version_name: string
+        snapshot_at: string
+        notes?: string | null
+        is_current: boolean
+      }>
+    }>('/api/gtm/master-versions'),
+
+  /** POST /api/gtm/provision-container — cria 2 containers GTM (~2-4min). */
+  provision: (body: {
+    tenant_slug: string
+    pixel_ids?: Record<string, string>
+    webhook_secrets?: { kiwify?: string; kirvano?: string; stripe?: string }
+  }) =>
+    request<{
+      tenant_id: string
+      web_container: { public_id: string; internal_id: string; snippet: string }
+      server_container: { public_id: string; internal_id: string; url: string }
+      master_version: string
+    }>('/api/gtm/provision-container', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /** POST /api/gtm/republish/:slug — diff sync master → tenant. */
+  republish: (tenantSlug: string, body: { autoPublish?: boolean } = {}) =>
+    request<{
+      tenant_id: string
+      status: 'updated' | 'already_current' | 'no_changes'
+      from_version: string
+      to_version: string
+      counts: {
+        web: SyncCountsResp
+        server: SyncCountsResp
+      }
+      warnings: string[]
+    }>(`/api/gtm/republish/${encodeURIComponent(tenantSlug)}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+}
+
+type SyncCountsResp = {
+  templates: { created: number; updated: number; skipped: number }
+  variables: { created: number; updated: number; preserved_value: number; skipped: number }
+  triggers: { created: number; updated: number; skipped: number }
+  clients: { created: number; updated: number; skipped: number }
+  tags: { created: number; updated: number; skipped: number }
+}
