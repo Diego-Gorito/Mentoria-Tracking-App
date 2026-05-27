@@ -445,67 +445,112 @@ export class GtmApiClient {
       sourceContainerId,
       sourceWorkspaceId,
     );
+    const existingTargetVariables = await this.listVariables(
+      targetAccountId,
+      targetContainerId,
+      targetWorkspaceId,
+    );
+    const existingVariableNames = new Set(
+      existingTargetVariables.map((v) => v.name),
+    );
     let vCount = 0;
     for (const v of variables) {
+      if (existingVariableNames.has(v.name)) continue;
       const remapped = remapVariableType(v, idMap.templates, targetContainerId);
       const cleaned = stripIds(remapped, 'variableId');
-      const created = await this.createVariable(
-        targetAccountId,
-        targetContainerId,
-        targetWorkspaceId,
-        cleaned as GtmVariable,
-      );
-      if (v.variableId && created.variableId) {
-        idMap.variables.set(v.variableId, created.variableId);
+      try {
+        const created = await this.createVariable(
+          targetAccountId,
+          targetContainerId,
+          targetWorkspaceId,
+          cleaned as GtmVariable,
+        );
+        if (v.variableId && created.variableId) {
+          idMap.variables.set(v.variableId, created.variableId);
+        }
+        vCount++;
+      } catch (err) {
+        if (err instanceof GtmConflictError) continue;
+        throw err;
       }
-      vCount++;
     }
     progress('copy_variables', `${vCount}`);
 
-    // 3. Triggers
+    // 3. Triggers (pre-list pra skip auto-criados)
     progress('copy_triggers');
     const triggers = await this.listTriggers(
       sourceAccountId,
       sourceContainerId,
       sourceWorkspaceId,
     );
+    const existingTargetTriggers = await this.listTriggers(
+      targetAccountId,
+      targetContainerId,
+      targetWorkspaceId,
+    );
+    const existingTriggerNames = new Set(
+      existingTargetTriggers.map((t) => t.name),
+    );
     let trgCount = 0;
     for (const t of triggers) {
+      if (existingTriggerNames.has(t.name)) continue;
       const cleaned = stripIds(t, 'triggerId') as GtmTrigger;
-      const created = await this.createTrigger(
-        targetAccountId,
-        targetContainerId,
-        targetWorkspaceId,
-        cleaned,
-      );
-      if (t.triggerId && created.triggerId) {
-        idMap.triggers.set(t.triggerId, created.triggerId);
+      try {
+        const created = await this.createTrigger(
+          targetAccountId,
+          targetContainerId,
+          targetWorkspaceId,
+          cleaned,
+        );
+        if (t.triggerId && created.triggerId) {
+          idMap.triggers.set(t.triggerId, created.triggerId);
+        }
+        trgCount++;
+      } catch (err) {
+        if (err instanceof GtmConflictError) continue;
+        throw err;
       }
-      trgCount++;
     }
     progress('copy_triggers', `${trgCount}`);
 
     // 4. Clients (server-side containers)
+    // FIX 2026-05-28: GTM auto-cria "GA4" Client default em novos containers
+    // server. Pre-list target → skip duplicates por name pra evitar 400 conflict.
     progress('copy_clients');
     const clients = await this.listClients(
       sourceAccountId,
       sourceContainerId,
       sourceWorkspaceId,
     );
+    const existingTargetClients = await this.listClients(
+      targetAccountId,
+      targetContainerId,
+      targetWorkspaceId,
+    );
+    const existingClientNames = new Set(existingTargetClients.map((c) => c.name));
     let cCount = 0;
     for (const c of clients) {
+      if (existingClientNames.has(c.name)) {
+        // Já existe (ex: GA4 default) — pula
+        continue;
+      }
       const remapped = remapClientType(c, idMap.templates, targetContainerId);
       const cleaned = stripIds(remapped, 'clientId') as GtmClient;
-      const created = await this.createClient(
-        targetAccountId,
-        targetContainerId,
-        targetWorkspaceId,
-        cleaned,
-      );
-      if (c.clientId && created.clientId) {
-        idMap.clients.set(c.clientId, created.clientId);
+      try {
+        const created = await this.createClient(
+          targetAccountId,
+          targetContainerId,
+          targetWorkspaceId,
+          cleaned,
+        );
+        if (c.clientId && created.clientId) {
+          idMap.clients.set(c.clientId, created.clientId);
+        }
+        cCount++;
+      } catch (err) {
+        if (err instanceof GtmConflictError) continue;
+        throw err;
       }
-      cCount++;
     }
     progress('copy_clients', `${cCount}`);
 
@@ -516,17 +561,29 @@ export class GtmApiClient {
       sourceContainerId,
       sourceWorkspaceId,
     );
+    const existingTargetTags = await this.listTags(
+      targetAccountId,
+      targetContainerId,
+      targetWorkspaceId,
+    );
+    const existingTagNames = new Set(existingTargetTags.map((t) => t.name));
     let tagCount = 0;
     for (const t of tags) {
+      if (existingTagNames.has(t.name)) continue; // skip duplicates (auto-criados)
       const remapped = remapTagRefs(t, idMap, targetContainerId);
       const cleaned = stripIds(remapped, 'tagId') as GtmTag;
-      await this.createTag(
-        targetAccountId,
-        targetContainerId,
-        targetWorkspaceId,
-        cleaned,
-      );
-      tagCount++;
+      try {
+        await this.createTag(
+          targetAccountId,
+          targetContainerId,
+          targetWorkspaceId,
+          cleaned,
+        );
+        tagCount++;
+      } catch (err) {
+        if (err instanceof GtmConflictError) continue;
+        throw err;
+      }
     }
     progress('copy_tags', `${tagCount}`);
 
