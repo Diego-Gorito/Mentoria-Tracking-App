@@ -83,10 +83,12 @@ describe('GtmApiClient', () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
       getAccessToken: async () => 'tok',
     });
-    const p = client.getContainer(ACCOUNT, '123');
-    // Avança todos os backoffs
+    // Attach catcher SYNC pra evitar unhandled rejection warning quando
+    // vi.advanceTimersByTimeAsync resolve rejection antes do await.
+    const p = client.getContainer(ACCOUNT, '123').catch((e) => e);
     await vi.advanceTimersByTimeAsync(10_000);
-    await expect(p).rejects.toBeInstanceOf(GtmRateLimitError);
+    const caught = await p;
+    expect(caught).toBeInstanceOf(GtmRateLimitError);
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 

@@ -160,6 +160,14 @@ export class GtmApiClient {
     await this.request('DELETE', `/accounts/${accountId}/containers/${containerId}`);
   }
 
+  async listContainers(accountId: string): Promise<GtmContainer[]> {
+    const r = await this.request<{ container?: GtmContainer[] }>(
+      'GET',
+      `/accounts/${accountId}/containers`,
+    );
+    return r.container ?? [];
+  }
+
   // ─── List entities ───────────────────────────────────────────────────────
 
   async listVariables(

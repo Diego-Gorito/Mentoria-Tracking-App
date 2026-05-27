@@ -12,6 +12,7 @@ import onboardingRouter from './onboarding'
 import hostingAccountsRouter from './hosting-accounts'
 import sitesRouter from './sites'
 import installationsRouter from './installations'
+import gtmRouter from './gtm'
 import { authMiddleware, getAuthCtx } from './middleware'
 import { requestIdMiddleware } from './requestId'
 import { errorHandler } from './errorHandler'
@@ -72,6 +73,9 @@ app.route('/api/onboarding', onboardingRouter)
 app.route('/api/hosting-accounts', hostingAccountsRouter)
 app.route('/api/sites', sitesRouter)
 app.route('/api/installations', installationsRouter)
+
+// --- GTM Master Clone provisioning (Era 2 — ADR-0009) ---
+app.route('/api/gtm', gtmRouter)
 
 // --- /api/me (autenticado) ---
 
