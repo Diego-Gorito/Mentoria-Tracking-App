@@ -1,0 +1,2392 @@
+{
+  "container_id": "247262309",
+  "public_id": "GTM-KMK749ZW",
+  "label": "WEB | Mentoria App",
+  "source": "workspace 6",
+  "live_version": "5",
+  "tags": [
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/24",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "24",
+      "name": "00.00 [CT] [HTML] Consent Banner LGPD",
+      "type": "html",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "html",
+          "value": "<script>(function(){if(document.cookie.indexOf(\"consent_preferences=\")!==-1)return;var s=document.createElement(\"style\");s.textContent=\"#ct-consent-banner{position:fixed;bottom:0;left:0;right:0;z-index:999999;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:#1a1a2e;color:#fff;box-shadow:0 -4px 20px rgba(0,0,0,.3);animation:ct-su .4s ease}@keyframes ct-su{from{transform:translateY(100%)}to{transform:translateY(0)}}#ct-consent-banner .ct-i{max-width:1200px;margin:0 auto;padding:20px 24px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}#ct-consent-banner p{margin:0;flex:1;min-width:250px;font-size:14px;line-height:1.5;color:#ccc}#ct-consent-banner .ct-b{display:flex;gap:10px;flex-shrink:0;flex-wrap:wrap}#ct-consent-banner button{border:none;border-radius:6px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer}#ct-rej,#ct-cst{background:transparent;color:#ccc;border:1px solid #555!important}#ct-acc{background:#4361ee;color:#fff}@media(max-width:600px){#ct-consent-banner .ct-i{flex-direction:column;text-align:center}}\";document.head.appendChild(s);var b=document.createElement(\"div\");b.id=\"ct-consent-banner\";b.innerHTML='<div class=\"ct-i\"><p>Usamos cookies para an\\u00e1lise e personaliza\\u00e7\\u00e3o. <a href=\"/politica-de-privacidade\" style=\"color:#4361ee\">Pol\\u00edtica de Privacidade</a>.</p><div class=\"ct-b\"><button id=\"ct-rej\">Rejeitar</button><button id=\"ct-cst\">Personalizar</button><button id=\"ct-acc\">Aceitar todos</button></div></div>';document.body.appendChild(b);function sc(a,d){var p={analytics:!!a,advertising:!!d,timestamp:Date.now()};document.cookie=\"consent_preferences=\"+encodeURIComponent(JSON.stringify(p))+\";max-age=31536000;path=/;SameSite=Lax;Secure\";window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag(\"consent\",\"update\",{\"ad_storage\":d?\"granted\":\"denied\",\"analytics_storage\":a?\"granted\":\"denied\",\"ad_user_data\":d?\"granted\":\"denied\",\"ad_personalization\":d?\"granted\":\"denied\"});b.style.display=\"none\";}document.getElementById(\"ct-acc\").addEventListener(\"click\",function(){sc(true,true);});document.getElementById(\"ct-rej\").addEventListener(\"click\",function(){sc(false,false);});document.getElementById(\"ct-cst\").addEventListener(\"click\",function(){sc(true,false);});})();</script>"
+        },
+        {
+          "type": "boolean",
+          "key": "supportDocumentWrite",
+          "value": "false"
+        }
+      ],
+      "fingerprint": "1778029122229",
+      "firingTriggerId": [
+        "22"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/24?apiLink=tag",
+      "paused": true,
+      "monitoringMetadata": {
+        "type": "map"
+      },
+      "consentSettings": {
+        "consentStatus": "notNeeded"
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/23",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "23",
+      "name": "00.00 [CT] [HTML] Consent Default",
+      "type": "html",
+      "priority": {
+        "type": "integer",
+        "value": "999999"
+      },
+      "parameter": [
+        {
+          "type": "template",
+          "key": "html",
+          "value": "<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag(\"consent\",\"default\",{\"ad_storage\":\"denied\",\"analytics_storage\":\"denied\",\"ad_user_data\":\"denied\",\"ad_personalization\":\"denied\",\"wait_for_update\":500});(function(){var m=document.cookie.match(/(?:^|;\\s*)consent_preferences=([^;]*)/);if(m){try{var p=JSON.parse(decodeURIComponent(m[1]));gtag(\"consent\",\"update\",{\"ad_storage\":p.advertising?\"granted\":\"denied\",\"analytics_storage\":p.analytics?\"granted\":\"denied\",\"ad_user_data\":p.advertising?\"granted\":\"denied\",\"ad_personalization\":p.advertising?\"granted\":\"denied\"});}catch(e){}}})();</script>"
+        },
+        {
+          "type": "boolean",
+          "key": "supportDocumentWrite",
+          "value": "false"
+        }
+      ],
+      "fingerprint": "1774361573519",
+      "firingTriggerId": [
+        "21"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/23?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "notNeeded"
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/25",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "25",
+      "name": "00.00 [CT] [HTML] fbclid → _fbc Cookie",
+      "type": "html",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "html",
+          "value": "<script>(function(){var p=new URLSearchParams(window.location.search);var f=p.get(\"fbclid\");if(f){document.cookie=\"_fbc=fb.1.\"+Date.now()+\".\"+f+\";max-age=7776000;path=/;SameSite=Lax;Secure\";}})();</script>"
+        },
+        {
+          "type": "boolean",
+          "key": "supportDocumentWrite",
+          "value": "false"
+        }
+      ],
+      "fingerprint": "1774361576321",
+      "firingTriggerId": [
+        "2147479553"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/25?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "needed",
+        "consentType": {
+          "type": "list",
+          "list": [
+            {
+              "type": "template",
+              "value": "ad_storage"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/26",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "26",
+      "name": "02.00 [CT] [GA4] Configuração",
+      "type": "googtag",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "tagId",
+          "value": "{{[CT] [GA4] Fluxo de Dados | ID da Métrica}}"
+        },
+        {
+          "type": "list",
+          "key": "configSettingsTable",
+          "list": [
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "send_page_view"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "true"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "server_container_url"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] transport_url}}"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "fingerprint": "1774361577535",
+      "firingTriggerId": [
+        "2147479553"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/26?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "notSet"
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/33",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "33",
+      "name": "02.01 [CT] [GA4] Evento | generate_lead",
+      "type": "gaawe",
+      "parameter": [
+        {
+          "type": "boolean",
+          "key": "sendEcommerceData",
+          "value": "false"
+        },
+        {
+          "type": "list",
+          "key": "eventSettingsTable",
+          "list": [
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "event_id"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] event_id}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_data.email_address"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] Email}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_data.phone_number"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] Phone}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "x-fb-ck-fbp"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] fbp}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "x-fb-ck-fbc"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] fbc}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_agent"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] user_agent}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "event_time"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] event_time}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "action_source"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "website"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "first_party_collection"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "true"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "lead_source"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] lead_source}}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "template",
+          "key": "eventName",
+          "value": "generate_lead"
+        },
+        {
+          "type": "template",
+          "key": "measurementIdOverride",
+          "value": "{{[CT] [GA4] Fluxo de Dados | ID da Métrica}}"
+        }
+      ],
+      "fingerprint": "1774361586090",
+      "firingTriggerId": [
+        "27"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/33?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "notSet"
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/34",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "34",
+      "name": "02.02 [CT] [GA4] Evento | sign_up",
+      "type": "gaawe",
+      "parameter": [
+        {
+          "type": "boolean",
+          "key": "sendEcommerceData",
+          "value": "false"
+        },
+        {
+          "type": "list",
+          "key": "eventSettingsTable",
+          "list": [
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "event_id"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] event_id}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_data.email_address"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] Email}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_data.phone_number"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] Phone}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "x-fb-ck-fbp"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] fbp}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "x-fb-ck-fbc"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] fbc}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_agent"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] user_agent}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "event_time"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] event_time}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "action_source"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "website"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "first_party_collection"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "true"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "method"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] method}}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "template",
+          "key": "eventName",
+          "value": "sign_up"
+        },
+        {
+          "type": "template",
+          "key": "measurementIdOverride",
+          "value": "{{[CT] [GA4] Fluxo de Dados | ID da Métrica}}"
+        }
+      ],
+      "fingerprint": "1774361587457",
+      "firingTriggerId": [
+        "28"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/34?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "notSet"
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/35",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "35",
+      "name": "02.03 [CT] [GA4] Evento | purchase",
+      "type": "gaawe",
+      "parameter": [
+        {
+          "type": "boolean",
+          "key": "sendEcommerceData",
+          "value": "true"
+        },
+        {
+          "type": "list",
+          "key": "eventSettingsTable",
+          "list": [
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "event_id"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] event_id}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_data.email_address"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] Email}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_data.phone_number"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] Phone}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "x-fb-ck-fbp"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] fbp}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "x-fb-ck-fbc"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] fbc}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_agent"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] user_agent}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "event_time"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] event_time}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "action_source"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "website"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "first_party_collection"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "true"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "transaction_id"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] transaction_id}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "value"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] value}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "currency"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] currency}}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "template",
+          "key": "eventName",
+          "value": "purchase"
+        },
+        {
+          "type": "template",
+          "key": "measurementIdOverride",
+          "value": "{{[CT] [GA4] Fluxo de Dados | ID da Métrica}}"
+        }
+      ],
+      "fingerprint": "1774361588846",
+      "firingTriggerId": [
+        "29"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/35?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "notSet"
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/36",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "36",
+      "name": "02.04 [CT] [GA4] Evento | begin_checkout",
+      "type": "gaawe",
+      "parameter": [
+        {
+          "type": "boolean",
+          "key": "sendEcommerceData",
+          "value": "true"
+        },
+        {
+          "type": "list",
+          "key": "eventSettingsTable",
+          "list": [
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "event_id"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] event_id}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_data.email_address"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] Email}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_data.phone_number"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] Phone}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "x-fb-ck-fbp"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] fbp}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "x-fb-ck-fbc"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] fbc}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_agent"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] user_agent}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "event_time"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] event_time}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "action_source"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "website"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "first_party_collection"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "true"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "value"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] value}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "currency"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] currency}}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "template",
+          "key": "eventName",
+          "value": "begin_checkout"
+        },
+        {
+          "type": "template",
+          "key": "measurementIdOverride",
+          "value": "{{[CT] [GA4] Fluxo de Dados | ID da Métrica}}"
+        }
+      ],
+      "fingerprint": "1774361590199",
+      "firingTriggerId": [
+        "30"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/36?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "notSet"
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/37",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "37",
+      "name": "02.05 [CT] [GA4] Evento | view_content",
+      "type": "gaawe",
+      "parameter": [
+        {
+          "type": "boolean",
+          "key": "sendEcommerceData",
+          "value": "false"
+        },
+        {
+          "type": "list",
+          "key": "eventSettingsTable",
+          "list": [
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "event_id"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] event_id}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_data.email_address"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] Email}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_data.phone_number"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] Phone}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "x-fb-ck-fbp"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] fbp}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "x-fb-ck-fbc"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] fbc}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_agent"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] user_agent}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "event_time"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] event_time}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "action_source"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "website"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "first_party_collection"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "true"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "content_type"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] content_type}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "content_id"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] content_id}}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "template",
+          "key": "eventName",
+          "value": "view_content"
+        },
+        {
+          "type": "template",
+          "key": "measurementIdOverride",
+          "value": "{{[CT] [GA4] Fluxo de Dados | ID da Métrica}}"
+        }
+      ],
+      "fingerprint": "1774361591629",
+      "firingTriggerId": [
+        "31"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/37?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "notSet"
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/38",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "38",
+      "name": "02.06 [CT] [GA4] Evento | contact",
+      "type": "gaawe",
+      "parameter": [
+        {
+          "type": "boolean",
+          "key": "sendEcommerceData",
+          "value": "false"
+        },
+        {
+          "type": "list",
+          "key": "eventSettingsTable",
+          "list": [
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "event_id"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] event_id}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_data.email_address"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] Email}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_data.phone_number"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] Phone}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "x-fb-ck-fbp"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] fbp}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "x-fb-ck-fbc"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] fbc}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "user_agent"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] user_agent}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "event_time"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] event_time}}"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "action_source"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "website"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "first_party_collection"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "true"
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "map": [
+                {
+                  "type": "template",
+                  "key": "parameter",
+                  "value": "contact_method"
+                },
+                {
+                  "type": "template",
+                  "key": "parameterValue",
+                  "value": "{{[CT] [VAR] contact_method}}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "template",
+          "key": "eventName",
+          "value": "contact"
+        },
+        {
+          "type": "template",
+          "key": "measurementIdOverride",
+          "value": "{{[CT] [GA4] Fluxo de Dados | ID da Métrica}}"
+        }
+      ],
+      "fingerprint": "1774361593162",
+      "firingTriggerId": [
+        "32"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/38?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "notSet"
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/39",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "39",
+      "name": "03.00 [CT] [Meta Ads] Pixel Base + PageView",
+      "type": "html",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "html",
+          "value": "<script>!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version=\"2.0\";n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,\"script\",\"https://connect.facebook.net/en_US/fbevents.js\");fbq(\"init\",\"2048259166079386\");fbq(\"track\",\"PageView\");</script>"
+        },
+        {
+          "type": "boolean",
+          "key": "supportDocumentWrite",
+          "value": "false"
+        }
+      ],
+      "fingerprint": "1774361594602",
+      "firingTriggerId": [
+        "2147479553"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/39?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "needed",
+        "consentType": {
+          "type": "list",
+          "list": [
+            {
+              "type": "template",
+              "value": "ad_storage"
+            },
+            {
+              "type": "template",
+              "value": "ad_user_data"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/40",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "40",
+      "name": "03.01 [CT] [Meta Ads] Evento | Lead",
+      "type": "html",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "html",
+          "value": "<script>if(typeof fbq!==\"undefined\"){fbq(\"track\",\"Lead\",{},{eventID:\"{{[CT] [VAR] event_id}}\"});}</script>"
+        },
+        {
+          "type": "boolean",
+          "key": "supportDocumentWrite",
+          "value": "false"
+        }
+      ],
+      "fingerprint": "1774361596099",
+      "firingTriggerId": [
+        "27"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/40?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "needed",
+        "consentType": {
+          "type": "list",
+          "list": [
+            {
+              "type": "template",
+              "value": "ad_storage"
+            },
+            {
+              "type": "template",
+              "value": "ad_user_data"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/41",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "41",
+      "name": "03.02 [CT] [Meta Ads] Evento | CompleteRegistration",
+      "type": "html",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "html",
+          "value": "<script>if(typeof fbq!==\"undefined\"){fbq(\"track\",\"CompleteRegistration\",{},{eventID:\"{{[CT] [VAR] event_id}}\"});}</script>"
+        },
+        {
+          "type": "boolean",
+          "key": "supportDocumentWrite",
+          "value": "false"
+        }
+      ],
+      "fingerprint": "1774361597499",
+      "firingTriggerId": [
+        "28"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/41?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "needed",
+        "consentType": {
+          "type": "list",
+          "list": [
+            {
+              "type": "template",
+              "value": "ad_storage"
+            },
+            {
+              "type": "template",
+              "value": "ad_user_data"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/42",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "42",
+      "name": "03.03 [CT] [Meta Ads] Evento | Purchase",
+      "type": "html",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "html",
+          "value": "<script>if(typeof fbq!==\"undefined\"){fbq(\"track\",\"Purchase\",{value:parseFloat(\"{{[CT] [VAR] value}}\")||0,currency:\"{{[CT] [VAR] currency}}\"||\"BRL\"},{eventID:\"{{[CT] [VAR] event_id}}\"});}</script>"
+        },
+        {
+          "type": "boolean",
+          "key": "supportDocumentWrite",
+          "value": "false"
+        }
+      ],
+      "fingerprint": "1774361598758",
+      "firingTriggerId": [
+        "29"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/42?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "needed",
+        "consentType": {
+          "type": "list",
+          "list": [
+            {
+              "type": "template",
+              "value": "ad_storage"
+            },
+            {
+              "type": "template",
+              "value": "ad_user_data"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/43",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "43",
+      "name": "03.04 [CT] [Meta Ads] Evento | InitiateCheckout",
+      "type": "html",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "html",
+          "value": "<script>if(typeof fbq!==\"undefined\"){fbq(\"track\",\"InitiateCheckout\",{value:parseFloat(\"{{[CT] [VAR] value}}\")||0,currency:\"{{[CT] [VAR] currency}}\"||\"BRL\"},{eventID:\"{{[CT] [VAR] event_id}}\"});}</script>"
+        },
+        {
+          "type": "boolean",
+          "key": "supportDocumentWrite",
+          "value": "false"
+        }
+      ],
+      "fingerprint": "1774361600039",
+      "firingTriggerId": [
+        "30"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/43?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "needed",
+        "consentType": {
+          "type": "list",
+          "list": [
+            {
+              "type": "template",
+              "value": "ad_storage"
+            },
+            {
+              "type": "template",
+              "value": "ad_user_data"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/44",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "44",
+      "name": "03.05 [CT] [Meta Ads] Evento | ViewContent",
+      "type": "html",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "html",
+          "value": "<script>if(typeof fbq!==\"undefined\"){fbq(\"track\",\"ViewContent\",{content_type:\"{{[CT] [VAR] content_type}}\",content_ids:[\"{{[CT] [VAR] content_id}}\"]},{eventID:\"{{[CT] [VAR] event_id}}\"});}</script>"
+        },
+        {
+          "type": "boolean",
+          "key": "supportDocumentWrite",
+          "value": "false"
+        }
+      ],
+      "fingerprint": "1774361601374",
+      "firingTriggerId": [
+        "31"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/44?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "needed",
+        "consentType": {
+          "type": "list",
+          "list": [
+            {
+              "type": "template",
+              "value": "ad_storage"
+            },
+            {
+              "type": "template",
+              "value": "ad_user_data"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/45",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "45",
+      "name": "03.06 [CT] [Meta Ads] Evento | Contact",
+      "type": "html",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "html",
+          "value": "<script>if(typeof fbq!==\"undefined\"){fbq(\"track\",\"Contact\",{},{eventID:\"{{[CT] [VAR] event_id}}\"});}</script>"
+        },
+        {
+          "type": "boolean",
+          "key": "supportDocumentWrite",
+          "value": "false"
+        }
+      ],
+      "fingerprint": "1774361602714",
+      "firingTriggerId": [
+        "32"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/45?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "needed",
+        "consentType": {
+          "type": "list",
+          "list": [
+            {
+              "type": "template",
+              "value": "ad_storage"
+            },
+            {
+              "type": "template",
+              "value": "ad_user_data"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/tags/47",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "tagId": "47",
+      "name": "03.00b [CT] [Meta Ads] PageView | SPA Navigation",
+      "type": "html",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "html",
+          "value": "<script>if(typeof fbq!==\"undefined\"){fbq(\"track\",\"PageView\",{},{eventID:crypto.randomUUID()});}</script>"
+        },
+        {
+          "type": "boolean",
+          "key": "supportDocumentWrite",
+          "value": "false"
+        }
+      ],
+      "fingerprint": "1774361605555",
+      "firingTriggerId": [
+        "46"
+      ],
+      "tagFiringOption": "oncePerEvent",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/tags/47?apiLink=tag",
+      "consentSettings": {
+        "consentStatus": "needed",
+        "consentType": {
+          "type": "list",
+          "list": [
+            {
+              "type": "template",
+              "value": "ad_storage"
+            },
+            {
+              "type": "template",
+              "value": "ad_user_data"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "variables": [
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/3",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "3",
+      "name": "[CT] [GA4] Fluxo de Dados | ID da Métrica",
+      "type": "c",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "value",
+          "value": "G-YJ07W2DY65"
+        }
+      ],
+      "fingerprint": "1774361545048",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/3?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/4",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "4",
+      "name": "[CT] [Meta Ads] Pixel ID",
+      "type": "c",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "value",
+          "value": "2048259166079386"
+        }
+      ],
+      "fingerprint": "1774361546491",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/4?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/5",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "5",
+      "name": "[CT] [VAR] transport_url",
+      "type": "c",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "value",
+          "value": "https://gtm.colegiomentoria.com.br"
+        }
+      ],
+      "fingerprint": "1774361547948",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/5?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/6",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "6",
+      "name": "[CT] [VAR] Country",
+      "type": "c",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "value",
+          "value": "br"
+        }
+      ],
+      "fingerprint": "1774361549294",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/6?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/7",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "7",
+      "name": "[CT] [VAR] Email",
+      "type": "v",
+      "parameter": [
+        {
+          "type": "integer",
+          "key": "dataLayerVersion",
+          "value": "2"
+        },
+        {
+          "type": "boolean",
+          "key": "setDefaultValue",
+          "value": "false"
+        },
+        {
+          "type": "template",
+          "key": "name",
+          "value": "user_data.email"
+        }
+      ],
+      "fingerprint": "1774361550781",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/7?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/8",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "8",
+      "name": "[CT] [VAR] Phone",
+      "type": "v",
+      "parameter": [
+        {
+          "type": "integer",
+          "key": "dataLayerVersion",
+          "value": "2"
+        },
+        {
+          "type": "boolean",
+          "key": "setDefaultValue",
+          "value": "false"
+        },
+        {
+          "type": "template",
+          "key": "name",
+          "value": "user_data.phone"
+        }
+      ],
+      "fingerprint": "1774361552199",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/8?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/9",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "9",
+      "name": "[CT] [VAR] transaction_id",
+      "type": "v",
+      "parameter": [
+        {
+          "type": "integer",
+          "key": "dataLayerVersion",
+          "value": "2"
+        },
+        {
+          "type": "boolean",
+          "key": "setDefaultValue",
+          "value": "false"
+        },
+        {
+          "type": "template",
+          "key": "name",
+          "value": "ecommerce.transaction_id"
+        }
+      ],
+      "fingerprint": "1774361553508",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/9?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/10",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "10",
+      "name": "[CT] [VAR] value",
+      "type": "v",
+      "parameter": [
+        {
+          "type": "integer",
+          "key": "dataLayerVersion",
+          "value": "2"
+        },
+        {
+          "type": "boolean",
+          "key": "setDefaultValue",
+          "value": "false"
+        },
+        {
+          "type": "template",
+          "key": "name",
+          "value": "ecommerce.value"
+        }
+      ],
+      "fingerprint": "1774361554798",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/10?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/11",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "11",
+      "name": "[CT] [VAR] currency",
+      "type": "v",
+      "parameter": [
+        {
+          "type": "integer",
+          "key": "dataLayerVersion",
+          "value": "2"
+        },
+        {
+          "type": "boolean",
+          "key": "setDefaultValue",
+          "value": "false"
+        },
+        {
+          "type": "template",
+          "key": "name",
+          "value": "ecommerce.currency"
+        }
+      ],
+      "fingerprint": "1774361556049",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/11?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/12",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "12",
+      "name": "[CT] [VAR] content_type",
+      "type": "v",
+      "parameter": [
+        {
+          "type": "integer",
+          "key": "dataLayerVersion",
+          "value": "2"
+        },
+        {
+          "type": "boolean",
+          "key": "setDefaultValue",
+          "value": "false"
+        },
+        {
+          "type": "template",
+          "key": "name",
+          "value": "content_type"
+        }
+      ],
+      "fingerprint": "1774361557324",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/12?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/13",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "13",
+      "name": "[CT] [VAR] content_id",
+      "type": "v",
+      "parameter": [
+        {
+          "type": "integer",
+          "key": "dataLayerVersion",
+          "value": "2"
+        },
+        {
+          "type": "boolean",
+          "key": "setDefaultValue",
+          "value": "false"
+        },
+        {
+          "type": "template",
+          "key": "name",
+          "value": "content_id"
+        }
+      ],
+      "fingerprint": "1774361558724",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/13?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/14",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "14",
+      "name": "[CT] [VAR] method",
+      "type": "v",
+      "parameter": [
+        {
+          "type": "integer",
+          "key": "dataLayerVersion",
+          "value": "2"
+        },
+        {
+          "type": "boolean",
+          "key": "setDefaultValue",
+          "value": "false"
+        },
+        {
+          "type": "template",
+          "key": "name",
+          "value": "method"
+        }
+      ],
+      "fingerprint": "1774361560149",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/14?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/15",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "15",
+      "name": "[CT] [VAR] lead_source",
+      "type": "v",
+      "parameter": [
+        {
+          "type": "integer",
+          "key": "dataLayerVersion",
+          "value": "2"
+        },
+        {
+          "type": "boolean",
+          "key": "setDefaultValue",
+          "value": "false"
+        },
+        {
+          "type": "template",
+          "key": "name",
+          "value": "lead_source"
+        }
+      ],
+      "fingerprint": "1774361561632",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/15?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/16",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "16",
+      "name": "[CT] [VAR] contact_method",
+      "type": "v",
+      "parameter": [
+        {
+          "type": "integer",
+          "key": "dataLayerVersion",
+          "value": "2"
+        },
+        {
+          "type": "boolean",
+          "key": "setDefaultValue",
+          "value": "false"
+        },
+        {
+          "type": "template",
+          "key": "name",
+          "value": "contact_method"
+        }
+      ],
+      "fingerprint": "1774361562966",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/16?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/17",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "17",
+      "name": "[CT] [VAR] event_id",
+      "type": "jsm",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "javascript",
+          "value": "function(){return crypto.randomUUID();}"
+        }
+      ],
+      "fingerprint": "1774361564307",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/17?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/18",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "18",
+      "name": "[CT] [VAR] fbp",
+      "type": "k",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "name",
+          "value": "_fbp"
+        }
+      ],
+      "fingerprint": "1774361565638",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/18?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/19",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "19",
+      "name": "[CT] [VAR] fbc",
+      "type": "k",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "name",
+          "value": "_fbc"
+        }
+      ],
+      "fingerprint": "1774361566894",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/19?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/20",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "20",
+      "name": "[CT] [VAR] event_time",
+      "type": "jsm",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "javascript",
+          "value": "function(){return Math.floor(Date.now()/1000);}"
+        }
+      ],
+      "fingerprint": "1774361569265",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/20?apiLink=variable"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/variables/48",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "variableId": "48",
+      "name": "[CT] [VAR] user_agent",
+      "type": "jsm",
+      "parameter": [
+        {
+          "type": "template",
+          "key": "javascript",
+          "value": "function(){return navigator.userAgent;}"
+        }
+      ],
+      "fingerprint": "1774361625140",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/variables/48?apiLink=variable"
+    }
+  ],
+  "triggers": [
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/triggers/21",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "triggerId": "21",
+      "name": "[CT] Acionador - Consent Initialization",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            {
+              "type": "template",
+              "key": "arg0",
+              "value": "{{_event}}"
+            },
+            {
+              "type": "template",
+              "key": "arg1",
+              "value": "gtm.init_consent"
+            }
+          ]
+        }
+      ],
+      "fingerprint": "1774361570672",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/triggers/21?apiLink=trigger"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/triggers/22",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "triggerId": "22",
+      "name": "[CT] Acionador - DOM Ready | Todas",
+      "type": "domReady",
+      "fingerprint": "1774361572040",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/triggers/22?apiLink=trigger"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/triggers/27",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "triggerId": "27",
+      "name": "[CT] Acionador - generate_lead",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            {
+              "type": "template",
+              "key": "arg0",
+              "value": "{{_event}}"
+            },
+            {
+              "type": "template",
+              "key": "arg1",
+              "value": "generate_lead"
+            }
+          ]
+        }
+      ],
+      "fingerprint": "1774361578748",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/triggers/27?apiLink=trigger"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/triggers/28",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "triggerId": "28",
+      "name": "[CT] Acionador - sign_up",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            {
+              "type": "template",
+              "key": "arg0",
+              "value": "{{_event}}"
+            },
+            {
+              "type": "template",
+              "key": "arg1",
+              "value": "sign_up"
+            }
+          ]
+        }
+      ],
+      "fingerprint": "1774361579955",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/triggers/28?apiLink=trigger"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/triggers/29",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "triggerId": "29",
+      "name": "[CT] Acionador - purchase",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            {
+              "type": "template",
+              "key": "arg0",
+              "value": "{{_event}}"
+            },
+            {
+              "type": "template",
+              "key": "arg1",
+              "value": "purchase"
+            }
+          ]
+        }
+      ],
+      "fingerprint": "1774361581148",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/triggers/29?apiLink=trigger"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/triggers/30",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "triggerId": "30",
+      "name": "[CT] Acionador - begin_checkout",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            {
+              "type": "template",
+              "key": "arg0",
+              "value": "{{_event}}"
+            },
+            {
+              "type": "template",
+              "key": "arg1",
+              "value": "begin_checkout"
+            }
+          ]
+        }
+      ],
+      "fingerprint": "1774361582361",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/triggers/30?apiLink=trigger"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/triggers/31",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "triggerId": "31",
+      "name": "[CT] Acionador - view_content",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            {
+              "type": "template",
+              "key": "arg0",
+              "value": "{{_event}}"
+            },
+            {
+              "type": "template",
+              "key": "arg1",
+              "value": "view_content"
+            }
+          ]
+        }
+      ],
+      "fingerprint": "1774361583541",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/triggers/31?apiLink=trigger"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/triggers/32",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "triggerId": "32",
+      "name": "[CT] Acionador - contact",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            {
+              "type": "template",
+              "key": "arg0",
+              "value": "{{_event}}"
+            },
+            {
+              "type": "template",
+              "key": "arg1",
+              "value": "contact"
+            }
+          ]
+        }
+      ],
+      "fingerprint": "1774361584733",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/triggers/32?apiLink=trigger"
+    },
+    {
+      "path": "accounts/6059193756/containers/247262309/workspaces/6/triggers/46",
+      "accountId": "6059193756",
+      "containerId": "247262309",
+      "workspaceId": "6",
+      "triggerId": "46",
+      "name": "[CT] Acionador - History Change | SPA",
+      "type": "historyChange",
+      "fingerprint": "1774361604220",
+      "tagManagerUrl": "https://tagmanager.google.com/#/container/accounts/6059193756/containers/247262309/workspaces/6/triggers/46?apiLink=trigger"
+    }
+  ],
+  "templates": []
+}
