@@ -25,6 +25,7 @@
 
 import type { Context, Next } from 'hono'
 import { supabaseAdmin } from './db'
+import { HttpError } from './errors'
 
 export type AuthContext = {
   userId: string
@@ -44,8 +45,11 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   const queryToken = c.req.query('token') ?? null
   const token = headerToken ?? queryToken
 
+  // Shape AC-10 (F-S05 errorHandler): throws sao mapeadas pra
+  // { error: { code, message, request_id } }. Antes retornavamos
+  // { error: 'string' } direto — quebra contrato com frontend.
   if (!token) {
-    return c.json({ error: 'Acesso nao autorizado' }, 401)
+    throw new HttpError(401, 'UNAUTHORIZED', 'Autenticação necessária')
   }
 
   try {
@@ -57,13 +61,13 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
     //    (paranoid: tratamos como falha)
     const { data, error } = await supabaseAdmin.auth.getClaims(token)
     if (error || !data) {
-      return c.json({ error: 'Token invalido ou expirado' }, 401)
+      throw new HttpError(401, 'INVALID_TOKEN', 'Token inválido ou expirado')
     }
 
     const claims = data.claims as unknown as Record<string, unknown>
     const userId = typeof claims.sub === 'string' ? claims.sub : null
     if (!userId) {
-      return c.json({ error: 'Token sem sub claim' }, 401)
+      throw new HttpError(401, 'INVALID_TOKEN', 'Token sem sub claim')
     }
 
     const email = typeof claims.email === 'string' ? claims.email : ''
@@ -86,8 +90,11 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
 
     c.set('authCtx', ctx)
     await next()
-  } catch {
-    return c.json({ error: 'Token invalido ou expirado' }, 401)
+  } catch (err) {
+    // Re-throw HttpError (já está no formato esperado pelo errorHandler).
+    // Captura erros não-HTTP (rede Supabase, etc) e converte pra 401 genérico.
+    if (err instanceof HttpError) throw err
+    throw new HttpError(401, 'INVALID_TOKEN', 'Token inválido ou expirado')
   }
 }
 

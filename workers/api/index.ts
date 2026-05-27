@@ -198,9 +198,20 @@ app.get('/api/internal/creds', async (c) => {
   return c.json({ error: 'Nao implementado — Era 1 sprint 2' }, 501)
 })
 
-// 404 fallback
+// 404 fallback — shape AC-10 com request_id pra correlação logs.
+// requestId vem do header já setado pelo requestIdMiddleware (linha 23 acima).
 app.notFound((c) => {
-  return c.json({ error: `Rota nao encontrada: ${c.req.method} ${c.req.path}` }, 404)
+  const requestId = c.res.headers.get('X-Request-ID') ?? ''
+  return c.json(
+    {
+      error: {
+        code: 'NOT_FOUND',
+        message: `Rota nao encontrada: ${c.req.method} ${c.req.path}`,
+        request_id: requestId,
+      },
+    },
+    404,
+  )
 })
 
 // Entrypoint Node.js

@@ -16,12 +16,18 @@ import type { TenantId } from './storage/types';
 /**
  * Tenant fixo do MVP F (single-tenant Mentoria).
  *
- * @todo F-S14 — substituir pelo UUID real puxado de `core.tenants` se o
- * smoke staging exigir alinhamento com o tenant real do Supabase. Por
- * enquanto vale o placeholder pra todos os endpoints (storage trata como
- * string opaca).
+ * UUID resolvido em 2026-05-27 via `SELECT id FROM core.tenants WHERE
+ * slug='mentoria'` no project Supabase `cjtwrzlwfqvzukjinmjr` (branch
+ * tracking-rebase). Esse UUID corresponde a:
+ *   - slug: 'mentoria'
+ *   - name: 'Colégio Mentoria'
+ *
+ * Como fix #1 do Codex (commit f7f81e8) já usa `ctx.tenantId` do JWT em
+ * todos os handlers (via `resolveTenantId(ctx)`), esta constante só serve
+ * como fallback documental + smoke local quando o Custom Access Token Hook
+ * estiver indisponível. Em prod, prevalece `ctx.tenantId` dos claims.
  */
-export const MENTORIA_TENANT_ID = '00000000-0000-0000-0000-000000000001' as TenantId;
+export const MENTORIA_TENANT_ID = '93031821-455e-490b-92c9-1ccbebf1b30f' as TenantId;
 
 /**
  * GTM container ID por brand_slug (F-S05 AC-5).
