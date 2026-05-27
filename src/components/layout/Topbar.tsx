@@ -138,12 +138,15 @@ export function Topbar({ onMenuOpen }: Props) {
         {/* Avatar + logout */}
         {user && (
           <div className="flex items-center gap-2">
-            {/* Avatar pill com inicial */}
+            {/* Avatar pill com inicial.
+                Codex #4 follow-up (2026-05-27): user.email pode vir vazio/undefined
+                de JWTs custom (ex: Custom Access Token Hook que esqueceu de
+                preservar claim email). Guard defensivo evita crash do app. */}
             <div
-              aria-label={`Usuário: ${user.email}`}
+              aria-label={`Usuário: ${user.email ?? 'sem email'}`}
               className="h-8 w-8 rounded-full bg-brand-green/20 border border-brand-green/30 flex items-center justify-center text-caption font-semibold text-brand-green select-none shrink-0"
             >
-              {user.email.charAt(0).toUpperCase()}
+              {user.email?.charAt(0)?.toUpperCase() ?? '?'}
             </div>
             <button
               type="button"
