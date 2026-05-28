@@ -22,6 +22,9 @@ COPY package*.json ./
 RUN npm ci
 
 COPY workers ./workers
+# Fix 2026-05-28: deployJob.ts importa scripts/build-plugin → precisa copiar
+# scripts/ também senão container crashloop com ERR_MODULE_NOT_FOUND
+COPY scripts ./scripts
 
 EXPOSE 3000
 
