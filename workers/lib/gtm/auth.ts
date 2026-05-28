@@ -9,7 +9,9 @@
  * (path pro JSON no filesystem).
  *
  * Em dev local: `GTM_SA_KEY_PATH=/Volumes/SSD 2T/Dev/tracking-claude-sa.json`
- * Em prod Easypanel: `GTM_SA_KEY_JSON='{...}'` ou via Vault read.
+ * Em prod Easypanel: `GTM_SA_KEY_JSON_B64='<base64 do JSON>'` (preferido — evita
+ * problemas de quebra-de-linha do private_key em panels). Alternativa:
+ * `GTM_SA_KEY_JSON='{...}'` (single-line) ou via Vault read.
  *
  * @see scripts/gtm/README.md
  */
@@ -46,13 +48,32 @@ let cachedKey: GtmServiceAccountKey | null = null;
  * Carrega Service Account key de env var (priority) ou filesystem path.
  *
  * Order:
- *   1. `GTM_SA_KEY_JSON` — JSON string completo (prod Easypanel)
- *   2. `GTM_SA_KEY_PATH` — path absoluto pro JSON (dev local)
- *   3. throw GtmAuthError
+ *   1. `GTM_SA_KEY_JSON_B64` — base64 do JSON (prod Easypanel — recomendado,
+ *      evita quebra do private_key por \n literal em UIs/panels)
+ *   2. `GTM_SA_KEY_JSON` — JSON string single-line (legacy)
+ *   3. `GTM_SA_KEY_PATH` — path absoluto pro JSON (dev local)
+ *   4. throw GtmAuthError
  */
 export function loadServiceAccountKey(): GtmServiceAccountKey {
   if (cachedKey) return cachedKey;
 
+  // 1. Base64-encoded (preferred for prod)
+  const envJsonB64 = process.env.GTM_SA_KEY_JSON_B64;
+  if (envJsonB64) {
+    try {
+      const decoded = Buffer.from(envJsonB64, 'base64').toString('utf-8');
+      const parsed = JSON.parse(decoded) as GtmServiceAccountKey;
+      validateKey(parsed);
+      cachedKey = parsed;
+      return parsed;
+    } catch (err) {
+      throw new GtmAuthError(
+        `Failed to parse GTM_SA_KEY_JSON_B64: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  // 2. Raw JSON
   const envJson = process.env.GTM_SA_KEY_JSON;
   if (envJson) {
     try {
