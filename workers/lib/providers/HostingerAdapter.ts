@@ -60,7 +60,12 @@ import type { IGtmStorage, InstallationId, TenantId } from '../storage';
 import { withRetry } from '../retry';
 import { appendAuditWithSanitization } from '../audit';
 
-const HOSTINGER_API_BASE = 'https://api.hostinger.com/api/hosting/v1';
+// FIX 2026-05-27 (F-S14 smoke real): api.hostinger.com retorna HTTP 530
+// (Cloudflare 1016 — origin DNS error). URL correta é developers.hostinger.com.
+// Reproduzido via curl direto:
+//   GET https://api.hostinger.com/...     → 530
+//   GET https://developers.hostinger.com/api/hosting/v1/websites → 401 Unauthenticated (correto)
+const HOSTINGER_API_BASE = 'https://developers.hostinger.com/api/hosting/v1';
 const LIST_SITES_CACHE_TTL_MS = 60_000;
 const LIST_SITES_PAGE_SIZE = 100;
 const LIST_SITES_MAX_SITES = 100; // MVP Diego tem <20 sites (F-S04 AC-1)
