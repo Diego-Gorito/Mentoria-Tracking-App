@@ -176,7 +176,14 @@ export async function republishTenantContainer(
       };
     }
 
-    // 2. Resolve target workspaces (default workspace of each tenant container)
+    // 2. Resolve target + source workspaces dinamicamente.
+    //
+    // F-S14 #5 fix (2026-05-28 — task #64): valores `master.web_master_workspace_id`
+    // / `master.server_master_workspace_id` no DB ficam STALE — GTM cria novo
+    // workspace internamente após cada publish (workspace 2 → 3 → 4 → 5 ao longo
+    // do tempo). syncContainer chamando listTags com workspace_id antigo retorna
+    // empty/404 e republish trava sem warning. Fix: chamar getDefaultWorkspaceId
+    // pra source + target a cada execução (sempre pega workspace atual).
     log('step=2_fetch_workspaces');
     const webWs = await deps.gtmClient.getDefaultWorkspaceId(
       gtmAccountId,
@@ -186,7 +193,18 @@ export async function republishTenantContainer(
       gtmAccountId,
       tc.server_container_internal_id,
     );
-    log(`web_ws=${webWs} server_ws=${serverWs}`);
+    const masterWebWs = await deps.gtmClient.getDefaultWorkspaceId(
+      gtmAccountId,
+      master.web_master_internal_id,
+    );
+    const masterServerWs = await deps.gtmClient.getDefaultWorkspaceId(
+      gtmAccountId,
+      master.server_master_internal_id,
+    );
+    log(`tenant_web_ws=${webWs} tenant_server_ws=${serverWs} master_web_ws=${masterWebWs} master_server_ws=${masterServerWs}`);
+    if (masterWebWs !== master.web_master_workspace_id) {
+      log(`master_web_workspace_id_stale db=${master.web_master_workspace_id} actual=${masterWebWs} — usando actual`);
+    }
 
     // 3. Diff sync web
     log('step=3_sync_web start');
@@ -194,7 +212,7 @@ export async function republishTenantContainer(
       client: deps.gtmClient,
       accountId: gtmAccountId,
       sourceContainerId: master.web_master_internal_id,
-      sourceWorkspaceId: master.web_master_workspace_id,
+      sourceWorkspaceId: masterWebWs,
       targetContainerId: tc.web_container_internal_id,
       targetWorkspaceId: webWs,
       warnings,
@@ -205,13 +223,13 @@ export async function republishTenantContainer(
         `tpl={c:${webCounts.templates.created},s:${webCounts.templates.skipped}}`,
     );
 
-    // 4. Diff sync server
+    // 4. Diff sync server (mesmo fix: workspaces dinâmicos)
     log('step=4_sync_server start');
     const serverCounts = await syncContainer({
       client: deps.gtmClient,
       accountId: gtmAccountId,
       sourceContainerId: master.server_master_internal_id,
-      sourceWorkspaceId: master.server_master_workspace_id,
+      sourceWorkspaceId: masterServerWs,
       targetContainerId: tc.server_container_internal_id,
       targetWorkspaceId: serverWs,
       warnings,
