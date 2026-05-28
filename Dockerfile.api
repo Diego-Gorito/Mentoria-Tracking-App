@@ -25,6 +25,10 @@ COPY workers ./workers
 # Fix 2026-05-28: deployJob.ts importa scripts/build-plugin → precisa copiar
 # scripts/ também senão container crashloop com ERR_MODULE_NOT_FOUND
 COPY scripts ./scripts
+# Fix 2026-05-28 (smoke F-S14 #2): scripts/build-plugin.ts lê
+# plugins/gtm4wp-mentoria/ pra empacotar. Sem COPY plugins/ resulta em
+# ENOENT: no such file or directory, lstat '/app/plugins/gtm4wp-mentoria'
+COPY plugins ./plugins
 
 EXPOSE 3000
 
