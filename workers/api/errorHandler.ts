@@ -16,6 +16,7 @@
 
 import type { Context } from 'hono';
 import { ZodError } from 'zod';
+import * as Sentry from '@sentry/node';
 
 import {
   DomainNotOwnedError,
@@ -121,5 +122,12 @@ export function errorHandler(err: Error, c: Context): Response {
 
   // 4. Fallback — erro genérico (NÃO leak da mensagem upstream)
   console.error(`[api] internal_error req=${requestId} msg=${err.message.slice(0, 200)}`);
+  // F-S14 #5: capture em Sentry SÓ erros "internos" não-mapeados (500).
+  // Erros mapeados (HttpError, ProviderError, ZodError) são expected e
+  // não vão pro Sentry — evita ruído. Apenas 500 = bug real merece alerta.
+  Sentry.captureException(err, {
+    tags: { request_id: requestId },
+    level: 'error',
+  });
   return c.json(makeBody('INTERNAL_ERROR', 'Erro interno', requestId), 500);
 }

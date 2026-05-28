@@ -3,6 +3,22 @@
 // Runtime: tsx (TypeScript direto, sem compilacao)
 // Deploy: Easypanel KV8 tracking-api (REGRA #-2 Cloudflare-Last)
 
+// Sentry init MUST be primeiro import (instrumenta http/fetch/etc auto).
+// SENTRY_DSN é optional — se ausente, Sentry vira no-op silencioso.
+// F-S14 #5 (2026-05-28 — task C horizonte 1).
+import * as Sentry from '@sentry/node'
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV ?? 'production',
+    release: process.env.SENTRY_RELEASE,
+    tracesSampleRate: 0.1,
+    profilesSampleRate: 0,
+    sendDefaultPii: false, // LGPD: nunca enviar PII automaticamente
+  })
+  console.log(`[sentry] initialized env=${process.env.NODE_ENV} dsn=${(process.env.SENTRY_DSN || '').slice(0,30)}...`)
+}
+
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
