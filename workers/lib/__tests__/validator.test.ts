@@ -26,10 +26,16 @@ const HTML_OK = `<html><head>
 <script src="https://www.googletagmanager.com/gtm.js?id=GTM-WVWQVMP"></script>
 </head><body></body></html>`;
 
+// FIX 2026-05-28 (F-S14 #4): fixture original tinha `gtm.js?id=` no script src,
+// que após o amplio de patterns (P3 gtm.start, P4 gtm.js src) JÁ sinaliza
+// dataLayer presente. O cenário "GTM ref sem dataLayer" não existe na vida real
+// — quem carrega o gtm.js cria dataLayer automaticamente. Fixture agora simula
+// HTML básico SEM GTM nenhum (cenário plugin não instalado / site sem tracking).
 const HTML_NO_DATALAYER = `<html><head>
-<!-- GTM-WVWQVMP container ref sem inline init -->
-<script src="https://www.googletagmanager.com/gtm.js?id=GTM-WVWQVMP"></script>
-</head><body></body></html>`;
+<title>Site sem GTM</title>
+<!-- Container ID GTM-WVWQVMP citado em meta tag mas nenhum script GTM -->
+<meta name="gtm-container" content="GTM-WVWQVMP">
+</head><body><h1>Hello</h1></body></html>`;
 
 const HTML_WRONG_CONTAINER = `<html><head>
 <script>window.dataLayer = window.dataLayer || []; var dataLayer = [];</script>

@@ -40,8 +40,23 @@ export interface ValidationResult {
 }
 
 const CONTAINER_PATTERN = /GTM-[A-Z0-9]{6,8}/;
+
+// Patterns que indicam GTM/dataLayer presente no HTML.
+// Match LOGICAL OR — qualquer um sinaliza GTM ativo.
+//
+// FIX 2026-05-28 (F-S14 #4): patterns originais só detectavam initialization
+// explícita (`window.dataLayer = window.dataLayer || []` ou `dataLayer = [`).
+// O snippet GTM canônico oficial usa IIFE com nome de var ofuscado:
+//   (function(w,d,s,l,i){ w[l]=w[l]||[]; ... })(window,document,'script','dataLayer','GTM-XXX');
+// O `dataLayer` literal só aparece como parâmetro IIFE, não como assignment.
+// Smoke F-S14 em ifrn.com.br: regex falhava com `datalayerMatch=false` mesmo
+// com GTM 100% funcional (containerMatch=true, expectedMatch=true).
 const DATALAYER_PATTERN_1 = /window\.dataLayer\s*=\s*window\.dataLayer\s*\|\|\s*\[\]/;
 const DATALAYER_PATTERN_2 = /dataLayer\s*=\s*\[/;
+// Padrão IIFE canônico GTM (sempre tem `gtm.start` event no init)
+const DATALAYER_PATTERN_3 = /['"]gtm\.start['"]/;
+// Script src do gtm.js — onde o GTM init é carregado
+const DATALAYER_PATTERN_4 = /googletagmanager\.com\/gtm\.js/;
 
 const STAGE_TIMEOUT_MS = 5000;
 
@@ -85,7 +100,10 @@ export async function validate(
   const containerMatch = CONTAINER_PATTERN.test(html);
   const expectedMatch = html.includes(expectedContainerId);
   const datalayerMatch =
-    DATALAYER_PATTERN_1.test(html) || DATALAYER_PATTERN_2.test(html);
+    DATALAYER_PATTERN_1.test(html) ||
+    DATALAYER_PATTERN_2.test(html) ||
+    DATALAYER_PATTERN_3.test(html) ||
+    DATALAYER_PATTERN_4.test(html);
 
   return {
     passed: containerMatch && expectedMatch && datalayerMatch,
