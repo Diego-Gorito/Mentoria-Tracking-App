@@ -670,11 +670,17 @@ async function syncTags(
 
 /** Tags/vars/triggers que NÃO devem ser sincronizados (out-of-scope master). */
 function shouldSync(name: string): boolean {
-  if (name.startsWith(CT_LOCAL_PREFIX)) return false; // customização do cliente
-  // Built-in vars (Page URL, Event, etc.) começam sem prefix [CT]
-  // Master também não tem essas. Só syncing [CT]*
-  if (!name.startsWith(CT_PREFIX)) {
-    // Names sem [CT] no MASTER são tools internos (não sync)
+  if (name.includes(CT_LOCAL_PREFIX)) return false; // customização do cliente
+  // F-S14 #5 fix (2026-05-28 — task #64 part 2):
+  // Era `startsWith(CT_PREFIX)`. Mas no master, tags têm prefix numérico:
+  //   `04.00 [CT] [G Ads] Vinculador de Conversões`
+  //   `02.00 [CT] [GA4] Configuração`
+  // E variables começam direto com [CT]:
+  //   `[CT] [G Ads] ID da Tag`
+  // Vars passavam, tags eram skipped → 6 novas tags Google Ads/TikTok/LinkedIn
+  // ficavam fora do diff sync. Includes captura ambos formatos.
+  if (!name.includes(CT_PREFIX)) {
+    // Names sem [CT] em nenhum lugar são tools internos (não sync)
     return false;
   }
   return true;
