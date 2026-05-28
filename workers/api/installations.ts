@@ -235,6 +235,36 @@ export function createInstallationsRouter(
       created_by: ctx.userId,
     });
 
+    // F-S14 #4 fix (2026-05-28) — Era 2 refresh em idempotency hit.
+    //
+    // Cenário: install antiga ficou com gtm_container_id Era 1 (BRAND_GTM_MAP
+    // fallback). Depois tenant fez provision-container Era 2 → tenant_containers
+    // tem row active com web_container_public_id novo. Resolver agora pega Era 2,
+    // mas createInstallation retornou row antiga via SHA1(site_domain), com
+    // container Era 1 stale. Fix: se container resolvido difere do persistido
+    // E install está em estado não-installed (draft/failed/uninstalled), atualizar
+    // o gtm_container_id. Se status='installed', não mexer — usar /republish
+    // pra rollout controlado (cliente pode estar com Era 1 ativa em produção).
+    if (installation.gtm_container_id !== gtmContainerId) {
+      const nonProdStates = ['draft', 'failed', 'uninstalled'] as const;
+      if (nonProdStates.includes(installation.status as typeof nonProdStates[number])) {
+        await storage.updateInstallation(installation.id, {
+          gtm_container_id: gtmContainerId,
+        });
+        installation.gtm_container_id = gtmContainerId;
+        console.log(
+          `[installations] container_refreshed id=${installation.id} ` +
+            `from=${installation.gtm_container_id} to=${gtmContainerId} src=${containerSource}`,
+        );
+      } else {
+        console.warn(
+          `[installations] container_stale id=${installation.id} ` +
+            `persisted=${installation.gtm_container_id} resolved=${gtmContainerId} ` +
+            `status=${installation.status} — skip refresh (use /republish pra rollout)`,
+        );
+      }
+    }
+
     await appendAuditWithSanitization(storage, {
       installation_id: installation.id,
       tenant_id: installation.tenant_id,
