@@ -42,6 +42,7 @@ import {
   GtmContainerNotResolvedError,
 } from '../lib/gtmContainerResolver';
 import { supabaseAdmin } from './db';
+import { HttpError } from './errors';
 import { LockConflictError } from './errors';
 import { deployJob, type DeployJobDeps } from './deployJob';
 import { validate as runValidator, type ValidationResult } from '../lib/validator';

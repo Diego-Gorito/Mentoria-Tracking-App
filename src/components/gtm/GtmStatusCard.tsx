@@ -77,7 +77,7 @@ export function GtmStatusCard({ info, currentMaster, isOutdated }: Props) {
             Tags & pixels gerenciados via Google Tag Manager
           </p>
         </div>
-        <StatusBadge variant={statusVariant(status)}>
+        <StatusBadge status={statusVariant(status)}>
           {statusLabel(status)}
         </StatusBadge>
       </div>

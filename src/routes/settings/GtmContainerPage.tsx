@@ -43,28 +43,24 @@ export function GtmContainerPage({ onNavigate }: Props) {
     try {
       const r = await republish(true)
       if (r.status === 'already_current') {
-        toast({
-          title: 'Já está atualizado',
-          description: `Tenant em ${r.to_version}, nada a fazer`,
-          variant: 'info',
-        })
+        toast(`Já está em ${r.to_version}, nada a fazer`, 'info', 4000)
       } else {
         const total =
           r.counts.web.tags.created +
           r.counts.web.variables.created +
           r.counts.server.tags.created
-        toast({
-          title: `Republished ${r.from_version} → ${r.to_version}`,
-          description: `${total} entidades novas. ${r.warnings.length} warnings.`,
-          variant: 'success',
-        })
+        toast(
+          `Republished ${r.from_version} → ${r.to_version}: ${total} novas, ${r.warnings.length} warnings`,
+          'success',
+          5000,
+        )
       }
     } catch (err) {
-      toast({
-        title: 'Falhou republish',
-        description: err instanceof Error ? err.message : String(err),
-        variant: 'danger',
-      })
+      toast(
+        `Falhou republish: ${err instanceof Error ? err.message : String(err)}`,
+        'error',
+        8000,
+      )
     } finally {
       setRepublishing(false)
     }
@@ -100,7 +96,7 @@ export function GtmContainerPage({ onNavigate }: Props) {
             <GtmStatusCard
               info={info}
               currentMaster={currentMaster}
-              isOutdated={isOutdated}
+              isOutdated={Boolean(isOutdated)}
             />
 
             {info?.status === 'active' && isOutdated && (

@@ -64,18 +64,10 @@ export function GtmProvisionForm({ tenantSlug, onProvision, disabled }: Props) {
         tenant_slug: tenantSlug,
         pixel_ids: cleaned,
       })
-      toast({
-        title: 'Container provisionado',
-        description: `Web + Server clonados do master. Aguarde ~30s pra propagação.`,
-        variant: 'success',
-      })
+      toast('GTM Container provisionado. Aguarde ~30s pra propagação.', 'success', 5000)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      toast({
-        title: 'Falhou ao provisionar',
-        description: msg,
-        variant: 'danger',
-      })
+      toast(`Falhou ao provisionar: ${msg}`, 'error', 8000)
     } finally {
       setSubmitting(false)
     }
