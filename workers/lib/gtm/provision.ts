@@ -187,17 +187,35 @@ export async function provisionTenantContainer(
   const onStep =
     deps.onStep ??
     (async (step, payload) => {
+      // Log structured pra Easypanel stdout (debug + audit cruzado)
+      console.log(
+        `[provision] tenant=${tenantId} step=${step} status=${payload.status}` +
+          (payload.durationMs ? ` ms=${payload.durationMs}` : '') +
+          (payload.detail ? ` detail=${payload.detail}` : '') +
+          (payload.error ? ` error=${String(payload.error).slice(0, 300)}` : ''),
+      );
       // Default audit: INSERT em core.gtm_clone_audit
-      await deps.supabase.from('gtm_clone_audit').insert({
-        tenant_id: tenantId,
-        action: 'provision',
-        step,
-        status: payload.status,
-        request_id: requestId,
-        duration_ms: payload.durationMs,
-        error: payload.error ? sanitizeError(payload.error) : null,
-        metadata: payload.metadata ?? {},
-      });
+      // FIX 2026-05-28: estava sem .schema('core') → INSERT silencioso falhava
+      // (tabela está em core, não public). Erro não propagava porque audit é
+      // best-effort — sem audit, sem visibilidade de step.
+      const { error: auditErr } = await deps.supabase
+        .schema('core')
+        .from('gtm_clone_audit')
+        .insert({
+          tenant_id: tenantId,
+          action: 'provision',
+          step,
+          status: payload.status,
+          request_id: requestId,
+          duration_ms: payload.durationMs,
+          error: payload.error ? sanitizeError(payload.error) : null,
+          metadata: payload.metadata ?? {},
+        });
+      if (auditErr) {
+        console.warn(
+          `[provision] audit_insert_failed tenant=${tenantId} step=${step} err=${auditErr.message}`,
+        );
+      }
     });
 
   // Step 1: init
