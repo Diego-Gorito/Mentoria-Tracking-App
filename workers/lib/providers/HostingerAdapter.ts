@@ -452,9 +452,18 @@ export class HostingerAdapter implements IHostingProvider {
       body: JSON.stringify({ username, domain }),
     });
 
-    const uploadUrl = String(resp.uploadUrl ?? resp.upload_url ?? '');
-    const authToken = String(resp.authToken ?? resp.auth_token ?? '');
-    const authRestToken = String(resp.authRestToken ?? resp.auth_rest_token ?? '');
+    // Hostinger API retorna `url`, `auth_key`, `rest_auth_key` (confirmed
+    // via smoke F-S14 #3). MCP source documenta `uploadUrl, authToken,
+    // authRestToken` (legacy). Aceitamos ambos pra robustez.
+    const uploadUrl = String(
+      resp.url ?? resp.uploadUrl ?? resp.upload_url ?? '',
+    );
+    const authToken = String(
+      resp.auth_key ?? resp.authToken ?? resp.auth_token ?? '',
+    );
+    const authRestToken = String(
+      resp.rest_auth_key ?? resp.authRestToken ?? resp.auth_rest_token ?? '',
+    );
 
     if (!uploadUrl || !authToken || !authRestToken) {
       throw new Error(
