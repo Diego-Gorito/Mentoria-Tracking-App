@@ -116,7 +116,28 @@ authRouter.post('/login', async (c) => {
   const { data, error } = await supabaseAdmin.auth.signInWithPassword({ email, password })
 
   if (error) {
-    // Supabase retorna 400 com 'Invalid login credentials' pra email ou senha errados
+    // FIX 2026-05-28 (F-S14 #4 — task #51): distinguir entre erros transient
+    // (hook cold-start, rate limit, service unavailable) vs erro real (credenciais).
+    // Antes: TUDO virava "E-mail ou senha incorretos" 401, confundia user em
+    // dia de PostgREST down (PGRST002) achando que tinha esquecido senha.
+    const msg = (error.message || '').toLowerCase()
+    const status = (error as { status?: number }).status
+
+    if (status === 503 || msg.includes('unavailable') || msg.includes('service down')) {
+      console.warn(`[auth] service_unavailable email=${email} err=${error.message}`)
+      return c.json({ error: 'Servidor indisponível. Tente novamente em ~1 minuto.' }, 503)
+    }
+    if (status === 422 || msg.includes('hook') || msg.includes('webhook') || msg.includes('timeout')) {
+      console.warn(`[auth] hook_likely_cold_start email=${email} err=${error.message}`)
+      return c.json({
+        error: 'Sistema iniciando. Aguarde ~5s e tente novamente.',
+      }, 503)
+    }
+    if (status === 429 || msg.includes('rate') || msg.includes('too many')) {
+      return c.json({ error: 'Muitas tentativas. Aguarde 1 minuto antes de tentar de novo.' }, 429)
+    }
+    // 400 'Invalid login credentials' → email/senha de fato errados
+    console.log(`[auth] login_failed email=${email} err=${error.message}`)
     return c.json({ error: 'E-mail ou senha incorretos' }, 401)
   }
 
@@ -230,6 +251,48 @@ authRouter.post('/refresh', async (c) => {
     expires_in: session.expires_in,
     token_type: 'bearer',
   })
+})
+
+// ── POST /warmup ──────────────────────────────────────────────────────────────
+// Endpoint público que pinga o hook custom-access-token com fake event pra
+// mantê-lo quente. Idéia: chamado por n8n cron cada 4min OR pelo frontend
+// antes de mostrar form de login. Evita o cold-start ~5s que joga primeira
+// login em timeout/422.
+//
+// F-S14 #4 fix (2026-05-28 — task #51 partial). Resposta 200 sempre:
+//   { warmed: true, hook_timing_ms: N, hook_status: 200|<other> }
+//
+// Sem autenticação por design — endpoint público, só faz keep-alive.
+authRouter.post('/warmup', async (c) => {
+  const start = Date.now()
+  const supabaseUrl = process.env.SUPABASE_URL
+  if (!supabaseUrl) {
+    return c.json({ warmed: false, error: 'SUPABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const r = await fetch(`${supabaseUrl}/functions/v1/custom-access-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'warmup',
+        user_id: '00000000-0000-0000-0000-000000000000',
+        claims: {},
+      }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    return c.json({
+      warmed: true,
+      hook_timing_ms: Date.now() - start,
+      hook_status: r.status,
+    })
+  } catch (err) {
+    return c.json({
+      warmed: false,
+      hook_timing_ms: Date.now() - start,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
 })
 
 export default authRouter
