@@ -119,8 +119,18 @@ export async function republishTenantContainer(
   const ok = await deps.redis.set(lockKey, requestId, 'EX', lockTtl, 'NX');
   if (ok !== 'OK') throw new RepublishLockError(input.tenant_id);
 
+  // F-S14 #5 (2026-05-28 — task #64): logs granulares por step + por entity.
+  // Smoke A+D revelou que republish silenciosamente NÃO sincronizou 6 tags
+  // novas (Google Ads + TikTok + LinkedIn) sem warnings óbvios. Logs perdidos
+  // entre deploys + redis lock orphan. Agora cada step e cada warning logado.
+  const log = (msg: string) =>
+    console.log(`[republish] tenant=${input.tenant_id} req=${requestId} ${msg}`);
+
+  log('lock_acquired');
+
   try {
     // 1. Get tenant container + current master version
+    log('step=1_fetch_tenant_container');
     const { data: tc, error: tcErr } = await deps.supabase
       .schema('core')
       .from('tenant_containers')
@@ -132,7 +142,9 @@ export async function republishTenantContainer(
     if (tcErr || !tc) {
       throw new Error(`Tenant ${input.tenant_id} sem container provisionado`);
     }
+    log(`tenant_container_id=${tc.id} current_master_version_id=${tc.master_version_id}`);
 
+    log('step=1_fetch_master');
     const { data: master, error: masterErr } = await deps.supabase
       .schema('core')
       .from('gtm_master_versions')
@@ -144,8 +156,10 @@ export async function republishTenantContainer(
     if (masterErr || !master) {
       throw new Error('No current master version');
     }
+    log(`master_version=${master.version_name} master_version_id=${master.id}`);
 
     if (tc.master_version_id === master.id) {
+      log('already_current — skipping sync');
       const { data: prevMaster } = await deps.supabase
         .schema('core')
         .from('gtm_master_versions')
@@ -163,6 +177,7 @@ export async function republishTenantContainer(
     }
 
     // 2. Resolve target workspaces (default workspace of each tenant container)
+    log('step=2_fetch_workspaces');
     const webWs = await deps.gtmClient.getDefaultWorkspaceId(
       gtmAccountId,
       tc.web_container_internal_id,
@@ -171,8 +186,10 @@ export async function republishTenantContainer(
       gtmAccountId,
       tc.server_container_internal_id,
     );
+    log(`web_ws=${webWs} server_ws=${serverWs}`);
 
     // 3. Diff sync web
+    log('step=3_sync_web start');
     const webCounts = await syncContainer({
       client: deps.gtmClient,
       accountId: gtmAccountId,
@@ -182,8 +199,14 @@ export async function republishTenantContainer(
       targetWorkspaceId: webWs,
       warnings,
     });
+    log(
+      `step=3_sync_web done tags={c:${webCounts.tags.created},u:${webCounts.tags.updated},s:${webCounts.tags.skipped}} ` +
+        `vars={c:${webCounts.variables.created},u:${webCounts.variables.updated},s:${webCounts.variables.skipped}} ` +
+        `tpl={c:${webCounts.templates.created},s:${webCounts.templates.skipped}}`,
+    );
 
     // 4. Diff sync server
+    log('step=4_sync_server start');
     const serverCounts = await syncContainer({
       client: deps.gtmClient,
       accountId: gtmAccountId,
@@ -193,9 +216,18 @@ export async function republishTenantContainer(
       targetWorkspaceId: serverWs,
       warnings,
     });
+    log(
+      `step=4_sync_server done tags={c:${serverCounts.tags.created},u:${serverCounts.tags.updated},s:${serverCounts.tags.skipped}}`,
+    );
+    log(`current_warnings_count=${warnings.length}`);
+    if (warnings.length > 0) {
+      // Log primeiros 5 warnings pra visibilidade (resto fica no return body)
+      warnings.slice(0, 5).forEach((w, i) => log(`  warning[${i}]=${w.slice(0, 200)}`));
+    }
 
     // 5. Publish if requested
     if (input.autoPublish !== false) {
+      log('step=5_publish start');
       const webVer = await deps.gtmClient.createVersion(
         gtmAccountId,
         tc.web_container_internal_id,
@@ -220,9 +252,13 @@ export async function republishTenantContainer(
         tc.server_container_internal_id,
         serverVer.containerVersionId,
       );
+      log(`step=5_publish done web_ver=${webVer.containerVersionId} server_ver=${serverVer.containerVersionId}`);
+    } else {
+      log('step=5_publish skipped (autoPublish=false)');
     }
 
     // 6. Update tenant_containers
+    log('step=6_update_tenant_container');
     await deps.supabase
       .schema('core')
       .from('tenant_containers')
