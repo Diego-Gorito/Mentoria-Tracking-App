@@ -563,8 +563,8 @@ export class HostingerAdapter implements IHostingProvider {
         'Upload-Offset': '0',
         'Content-Type': 'application/offset+octet-stream',
       },
-      // Buffer é compatível com BodyInit no Node 22
-      body: buf as unknown as BodyInit,
+      // Buffer é compatível com fetch body no Node 22 (sem DOM lib em tsconfig)
+      body: buf as unknown as ArrayBuffer,
     });
     if (patchResp.status !== 204 && patchResp.status !== 200) {
       const text = await this.safeReadText(patchResp);
@@ -579,7 +579,7 @@ export class HostingerAdapter implements IHostingProvider {
   /** Wrapper fetch p/ TUS (NÃO seta Bearer — TUS usa X-Auth headers próprios). */
   private async tusRequest(
     url: string,
-    init: { method: string; headers: Record<string, string>; body: BodyInit },
+    init: { method: string; headers: Record<string, string>; body: string | ArrayBuffer | Buffer },
   ): Promise<Response> {
     const timeoutSignal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
     try {

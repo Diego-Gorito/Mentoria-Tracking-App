@@ -223,11 +223,22 @@ export function SiteCard({
           {/* Codex #4 (2026-05-27): estado pending_activation — plugin no
               servidor mas user precisa ativar no wp-admin antes do validator
               F-S06 confirmar. CTA primária "Já ativei, validar agora" dispara
-              POST /:id/revalidate via onRevalidate. */}
+              POST /:id/revalidate via onRevalidate.
+              F-S14 #4 (2026-05-28 — task #58): link direto pro wp-admin
+              filtrando o plugin "mentoria" pra reduzir cliques + chance de erro. */}
           {!isUnsupported && isPendingActivation && (
             <>
               <p className="text-caption text-fg-on-light-muted text-right sm:max-w-[260px]">
-                Plugin enviado. Ative em <span className="font-mono">wp-admin → Plugins</span> e clique abaixo.
+                Plugin enviado. Abra{' '}
+                <a
+                  href={`https://${site.domain}/wp-admin/plugins.php?s=mentoria`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono underline text-primary hover:text-primary-hover"
+                >
+                  wp-admin → Plugins
+                </a>
+                , ative o "GTM4WP Mentoria Bootstrap" e clique abaixo.
               </p>
               {onRevalidate && (
                 <Button
