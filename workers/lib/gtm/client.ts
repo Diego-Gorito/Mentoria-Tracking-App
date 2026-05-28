@@ -344,13 +344,28 @@ export class GtmApiClient {
     name: string,
     notes?: string,
   ): Promise<GtmContainerVersion> {
-    const r = await this.request<{ containerVersion?: GtmContainerVersion }>(
+    const r = await this.request<{
+      containerVersion?: GtmContainerVersion;
+      compilerError?: boolean;
+    }>(
       'POST',
       `/accounts/${accountId}/containers/${containerId}/workspaces/${workspaceId}:create_version`,
       { name, notes },
     );
     if (!r.containerVersion) {
       throw new GtmApiError('createVersion: missing containerVersion in response', 500);
+    }
+    // F-S14 #3 (2026-05-28): GTM API retorna HTTP 200 com compilerError:true
+    // quando workspace tem refs broken (var/trigger/template não resolvido).
+    // O containerVersion retornado tem ID fake (não persistido) e publishVersion
+    // bate 404 com "Not found or permission denied". Falhamos cedo com erro
+    // descritivo em vez de blindly seguir.
+    if (r.compilerError === true) {
+      throw new GtmApiError(
+        `createVersion: workspace has compilerError (broken refs in entities). ` +
+          `Run quick_preview to inspect. Container: ${containerId}, Workspace: ${workspaceId}`,
+        500,
+      );
     }
     return r.containerVersion;
   }
@@ -363,6 +378,55 @@ export class GtmApiClient {
     await this.request(
       'POST',
       `/accounts/${accountId}/containers/${containerId}/versions/${versionId}:publish`,
+    );
+  }
+
+  // ─── Built-in variables ─────────────────────────────────────────────────
+  //
+  // Built-in vars (Page URL, Click ID, Form Element, etc.) NÃO são clonadas
+  // pelo copyContainerContents do tracking-api. Container novo começa com
+  // apenas 5 built-ins ativados (Page URL/Hostname/Path, Referrer, Event).
+  // Master GTM-WLZ3H8VH tem 10 ativados (+ Click *) — tags/triggers do clone
+  // que referenciem {{Click URL}} batem compilerError porque a built-in
+  // não está ativada no workspace alvo.
+  //
+  // F-S14 #3 fix (2026-05-28): copyContainerContents passa a chamar
+  // listBuiltInVariables(source) → enableBuiltInVariables(target, missingTypes)
+  // antes de copiar tags/triggers/vars.
+
+  /** Lista built-in variables ATIVADAS no workspace. */
+  async listBuiltInVariables(
+    accountId: string,
+    containerId: string,
+    workspaceId: string,
+  ): Promise<Array<{ type: string; name: string }>> {
+    const r = await this.request<{
+      builtInVariable?: Array<{ type: string; name: string }>;
+    }>(
+      'GET',
+      `/accounts/${accountId}/containers/${containerId}/workspaces/${workspaceId}/built_in_variables`,
+    );
+    return r.builtInVariable ?? [];
+  }
+
+  /**
+   * Ativa um conjunto de built-in vars no workspace. Endpoint aceita múltiplos
+   * `type=X` na query string em uma só chamada.
+   *
+   * @param types array de tipos GTM oficiais ex: ['clickClasses','clickElement']
+   *   Lista canônica: https://developers.google.com/tag-platform/tag-manager/api/v2/reference/accounts/containers/workspaces/built_in_variables#BuiltInVariable.Type
+   */
+  async enableBuiltInVariables(
+    accountId: string,
+    containerId: string,
+    workspaceId: string,
+    types: string[],
+  ): Promise<void> {
+    if (types.length === 0) return;
+    const qs = types.map((t) => `type=${encodeURIComponent(t)}`).join('&');
+    await this.request(
+      'POST',
+      `/accounts/${accountId}/containers/${containerId}/workspaces/${workspaceId}/built_in_variables?${qs}`,
     );
   }
 
@@ -401,6 +465,48 @@ export class GtmApiClient {
       clients: new Map(),
       tags: new Map(),
     };
+
+    // 0. Built-in variables — ativar TODAS que master tem ativadas no target.
+    //
+    // F-S14 #3 fix (2026-05-28): sem isso, tags/triggers referenciando
+    // {{Click URL}}, {{Click Classes}}, {{Form ID}}, etc. batem compilerError
+    // no workspace alvo → createVersion retorna ID fake → publishVersion 404.
+    try {
+      const srcBuiltins = await this.listBuiltInVariables(
+        sourceAccountId,
+        sourceContainerId,
+        sourceWorkspaceId,
+      );
+      const tgtBuiltins = await this.listBuiltInVariables(
+        targetAccountId,
+        targetContainerId,
+        targetWorkspaceId,
+      );
+      const tgtTypes = new Set(tgtBuiltins.map((b) => b.type));
+      const missing = srcBuiltins
+        .map((b) => b.type)
+        .filter((t) => !tgtTypes.has(t));
+      if (missing.length > 0) {
+        await this.enableBuiltInVariables(
+          targetAccountId,
+          targetContainerId,
+          targetWorkspaceId,
+          missing,
+        );
+      }
+      progress(
+        'init',
+        `built_in_vars: ${srcBuiltins.length} src, ${tgtBuiltins.length} tgt, ${missing.length} ativadas`,
+      );
+    } catch (err) {
+      // Don't fail entire clone se built-in copy falhar — workspace pode
+      // ter algumas tags inutilizáveis mas resto funciona. Audit logging
+      // do tracking-api captura. Log warn pra debug.
+      console.warn(
+        '[gtm.copyContainerContents] built_in_variables copy failed:',
+        err instanceof Error ? err.message : String(err),
+      );
+    }
 
     // 1. Templates first (referenciados por type cvt_X)
     progress('copy_templates');
