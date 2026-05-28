@@ -647,7 +647,24 @@ async function syncTags(
       counts.tags.skipped++;
     } else {
       try {
-        const { tagId: _, ...body } = s;
+        // F-S14 #5 fix (2026-05-28 — task #64 part 3): stripping `tagId` apenas
+        // não basta. Source tag tem `containerId`/`accountId`/`workspaceId`/`path`/
+        // `fingerprint`/`tagManagerUrl` apontando pro MASTER. POST com esses fields
+        // pro target → GTM API rejeita com "tag.container_id: Mismatched key with
+        // path or parent." 5 tags Google Ads + TikTok falhavam silenciosamente.
+        const {
+          tagId: _tagId,
+          containerId: _cId,
+          accountId: _aId,
+          workspaceId: _wId,
+          path: _path,
+          fingerprint: _fp,
+          tagManagerUrl: _url,
+          ...body
+        } = s as GtmTag & {
+          containerId?: string; accountId?: string; workspaceId?: string;
+          path?: string; fingerprint?: string; tagManagerUrl?: string;
+        };
         await opts.client.createTag(
           opts.accountId,
           opts.targetContainerId,
