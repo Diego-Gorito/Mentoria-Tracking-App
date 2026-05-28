@@ -9,18 +9,38 @@
  * O Hostinger MCP server só roda em contexto Claude/cliente — o `tracking-api`
  * Hono Node em Easypanel KV8 NÃO tem acesso ao MCP runtime. A story F-S04
  * (Tech Notes linha 99) autoriza explicitamente fallback REST direto:
- * `fetch('https://api.hostinger.com/api/hosting/v1/...', { headers: {
+ * `fetch('https://developers.hostinger.com/api/hosting/v1/...', { headers: {
  * Authorization: 'Bearer ' + token } })`. Endpoints públicos confirmed.
  *
  * Endpoints REST relevantes:
  *  - `GET /api/hosting/v1/websites` — list websites (paginated)
- *  - `POST /api/hosting/v1/websites/{domain}/deploy/wordpress-plugin`
- *    — deploy plugin (payload `{ slug, pluginPath }`)
+ *  - `GET /api/hosting/v1/websites?domain=X` — resolve username from domain (F-S14 #2)
+ *  - `POST /api/hosting/v1/files/upload-urls` — get TUS upload credentials (F-S14 #2)
  *  - `pingToken` = `GET /api/hosting/v1/websites?page=1&per_page=1`
  *
- * TODO F-S04 SP-1 followup: se algum endpoint não bater 100% com a API real
- * (a API pública Hostinger é parcialmente undocumented fora do MCP source),
- * Diego ajusta após smoke test F-S14.
+ * ## Plugin upload protocol (F-S14 #2 fix 2026-05-28)
+ *
+ * O endpoint hipotético `POST /websites/{domain}/deploy/wordpress-plugin`
+ * NÃO EXISTE — retorna 404. Smoke F-S14 isolou que o protocolo real é
+ * **TUS upload arquivo-por-arquivo** via servidor de files separado:
+ *
+ *  1. `GET /websites?domain=ifrn.com.br` → resolve `username` (ex u393832877)
+ *  2. `POST /files/upload-urls` `{username, domain}` → retorna
+ *     `{uploadUrl, authRestToken, authToken}`. `uploadUrl` aponta pra
+ *     `https://srv<N>-files.hstgr.io/rest/<token>/api/tus/public_html`
+ *  3. Pra cada arquivo do pluginPath:
+ *     a. Pre-upload `POST {uploadUrl}/wp-content/plugins/{dir}/{relPath}?override=true`
+ *        com `X-Auth`, `X-Auth-Rest`, `upload-length: <bytes>`, `upload-offset: 0`,
+ *        body vazio → 201 Created
+ *     b. TUS PATCH no mesmo URL com `Upload-Offset: 0`,
+ *        `Content-Type: application/offset+octet-stream`,
+ *        `Tus-Resumable: 1.0.0`, body = bytes → 204 No Content
+ *
+ * `uploadDirName` é gerado client-side como `{slug}-{rand8}` pra evitar
+ * conflito de plugin folders. WordPress detecta plugin por Plugin Name
+ * no PHP, então o suffix só afeta filesystem path (caveat ADR-0008 §3.1).
+ *
+ * Reference: hostinger/api-mcp-server src/core/runtime.ts (handleWordpressPluginDeploy).
  *
  * ## Caveat random suffix (ADR-0008 §3.1)
  *
@@ -43,6 +63,10 @@
  * @see docs/stories/F-S04.md
  * @see docs/stories/F-S07.md
  */
+
+import { readFile, readdir, stat } from 'node:fs/promises';
+import { join, posix, relative } from 'node:path';
+import { randomBytes } from 'node:crypto';
 
 import type {
   DeployPluginOpts,
@@ -138,6 +162,16 @@ interface HostingerDeployResponse {
   [k: string]: unknown;
 }
 
+/** Credenciais TUS retornadas por POST /files/upload-urls. */
+interface TusCredentials {
+  /** Base URL pro PATCH (ex `https://srv1891-files.hstgr.io/rest/<token>/api/tus/public_html`). */
+  uploadUrl: string;
+  /** Token de auth principal. Vai em header `X-Auth`. */
+  authToken: string;
+  /** Token REST extra. Vai em header `X-Auth-Rest`. */
+  authRestToken: string;
+}
+
 export class HostingerAdapter implements IHostingProvider {
   private readonly token: string;
   private readonly wpAdminPassword?: string;
@@ -215,55 +249,84 @@ export class HostingerAdapter implements IHostingProvider {
   }
 
   /**
-   * AC-3 + AC-5 + AC-6: Deploya plugin com retry + audit log.
+   * AC-3 + AC-5 + AC-6: Deploya plugin via TUS upload arquivo-por-arquivo.
+   *
+   * Pipeline (F-S14 #2 — 2026-05-28):
+   *   1. resolveUsername(domain) — GET /websites?domain
+   *   2. fetchUploadCredentials(username, domain) — POST /files/upload-urls
+   *   3. walkPluginFiles(pluginPath) — lista files recursivos
+   *   4. uploadDirName = `{slug}-{rand8}` (server-side suffix removido — geramos)
+   *   5. pra cada file: pre-upload POST + TUS PATCH (1 chunk)
+   *
+   * Retry envolve TODA a operação de upload (3 tentativas, backoff exponencial).
+   * Audit logging per attempt + final result (AC-6).
    *
    * Caller (F-S05) garante que `opts.domain` está em listSites() ANTES via
    * `verifyDomain()`. Defesa em profundidade: 403 do Hostinger → DomainNotOwnedError.
    */
   async deployPlugin(opts: DeployPluginOpts): Promise<DeployResult> {
-    const url =
-      `${HOSTINGER_API_BASE}/websites/${encodeURIComponent(opts.domain)}` +
-      `/deploy/wordpress-plugin`;
-
     const startedAt = Date.now();
+    const uploadDirName = `${opts.slug}-${this.generateRandomSuffix(8)}`;
 
-    const doRequest = async (): Promise<HostingerDeployResponse> => {
+    const doUpload = async (): Promise<{ successful: number; failed: number }> => {
       const attemptStartedAt = Date.now();
       try {
-        return await this.fetchJson<HostingerDeployResponse>(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            slug: opts.slug,
-            pluginPath: opts.pluginPath,
-          }),
-        });
-      } catch (err) {
-        // 403 from Hostinger no deploy = domain mismatch (defense in depth)
-        if (err instanceof HostingerHttpError && err.statusCode === 403) {
-          throw new DomainNotOwnedError(opts.domain);
+        // Step 1: resolve username from domain
+        const username = await this.resolveUsername(opts.domain);
+
+        // Step 2: fetch upload credentials (TUS server URL + tokens)
+        const creds = await this.fetchUploadCredentials(username, opts.domain);
+
+        // Step 3: walk pluginPath recursive
+        const files = await this.walkPluginFiles(opts.pluginPath);
+        if (files.length === 0) {
+          throw new Error(`No files found in pluginPath: ${opts.pluginPath}`);
         }
-        throw err;
+
+        // Step 4 + 5: per-file pre-upload + TUS PATCH
+        let successful = 0;
+        let failed = 0;
+        for (const absPath of files) {
+          // relPath relativo ao pluginPath, normalizado pra forward slashes
+          const relPath = relative(opts.pluginPath, absPath).split(/[\\/]/).join('/');
+          const remotePath = posix.join('wp-content/plugins', uploadDirName, relPath);
+          try {
+            await this.uploadFileTus(absPath, remotePath, creds);
+            successful++;
+          } catch (err) {
+            failed++;
+            this.logStructured({
+              event: 'tus_upload_file_failed',
+              domain: opts.domain,
+              file: relPath,
+              error: this.errorMessage(err),
+            });
+            // Continua os demais arquivos. Caller decide se 'partial' OK.
+          }
+        }
+
+        return { successful, failed };
       } finally {
-        // Log timing per attempt (Easypanel stdout 7d retention; ADR-0008 §3.7)
         const timing = Date.now() - attemptStartedAt;
         this.logStructured({
           event: 'deploy_plugin_attempt',
           domain: opts.domain,
           slug: opts.slug,
+          upload_dir_name: uploadDirName,
           timing_ms: timing,
         });
       }
     };
 
-    let raw: HostingerDeployResponse;
+    let counts: { successful: number; failed: number };
     try {
-      raw = await withRetry(doRequest, {
+      counts = await withRetry(doUpload, {
         attempts: 3,
         backoff: [1000, 2000, 4000],
+        // Não retry quando TODOS arquivos uploaded com sucesso (success path).
+        // Retry só nas exceptions (auth/network). Se "partial" (alguns falharam),
+        // não retry — deixa caller decidir (Onda 1.5: targeted re-upload dos failed).
         onRetry: async (err, attemptNumber) => {
-          // AC-6: audit cada retry attempt (não o initial).
-          // Payload usa só keys whitelist (F-S07 sanitization).
           await this.safeAppendAudit({
             action: 'upload_started',
             payload: {
@@ -276,8 +339,20 @@ export class HostingerAdapter implements IHostingProvider {
         },
       });
     } catch (err) {
-      // Final failure → audit + mapeia pra ProviderError hierarchy.
-      // Payload usa só keys whitelist (F-S07 sanitization).
+      // 403 from Hostinger = domain mismatch (defense in depth — verifyDomain antes)
+      if (err instanceof HostingerHttpError && err.statusCode === 403) {
+        await this.safeAppendAudit({
+          action: 'upload_failed',
+          payload: {
+            status_code: 403,
+            timing_ms: Date.now() - startedAt,
+            site_domain: opts.domain,
+            error_summary: 'DomainNotOwnedError',
+          },
+        });
+        throw new DomainNotOwnedError(opts.domain);
+      }
+
       await this.safeAppendAudit({
         action: 'upload_failed',
         payload: {
@@ -290,29 +365,18 @@ export class HostingerAdapter implements IHostingProvider {
       throw this.mapError(err, opts.domain);
     }
 
-    const summary = raw.summary ?? {};
-    const successful = Number(summary.successful ?? 0);
-    const failed = Number(summary.failed ?? 0);
-
     let status: DeployResult['status'];
-    if (failed === 0 && successful > 0) status = 'success';
-    else if (failed > 0 && successful > 0) status = 'partial';
+    if (counts.failed === 0 && counts.successful > 0) status = 'success';
+    else if (counts.failed > 0 && counts.successful > 0) status = 'partial';
     else status = 'failed';
-
-    const uploadDirName =
-      raw.uploadDirName ?? raw.upload_dir_name ?? undefined;
 
     const result: DeployResult = {
       status,
-      summary: { successful, failed },
+      summary: { successful: counts.successful, failed: counts.failed },
       uploadDirName,
-      errorSummary: raw.error ? this.truncate(String(raw.error), 500) : undefined,
+      errorSummary: undefined,
     };
 
-    // AC-6: audit final result.
-    // Payload usa só keys whitelist (F-S07 sanitization). file_count agrega
-    // successful + failed; detalhes ricos vivem em DeployResult.summary que
-    // o caller (deployJob) tem em mãos.
     await this.safeAppendAudit({
       action: status === 'failed' ? 'upload_failed' : 'upload_complete',
       payload: {
@@ -320,7 +384,7 @@ export class HostingerAdapter implements IHostingProvider {
         timing_ms: Date.now() - startedAt,
         site_domain: opts.domain,
         upload_dir_name: uploadDirName,
-        file_count: successful + failed,
+        file_count: counts.successful + counts.failed,
       },
     });
 
@@ -345,6 +409,203 @@ export class HostingerAdapter implements IHostingProvider {
   }
 
   // ===== privates =====
+
+  // ----- TUS upload helpers (F-S14 #2) -----
+
+  /**
+   * Resolve username Hostinger a partir do domain.
+   * GET /websites?domain=X → data[0].username.
+   * Necessário pra obter upload credentials (próximo step).
+   */
+  private async resolveUsername(domain: string): Promise<string> {
+    const url = new URL(`${HOSTINGER_API_BASE}/websites`);
+    url.searchParams.set('domain', domain);
+
+    const resp = await this.fetchJson<HostingerListResponse | HostingerWebsiteRaw[]>(
+      url.toString(),
+      { method: 'GET' },
+    );
+    const list = Array.isArray(resp) ? resp : (resp.data ?? []);
+    if (list.length === 0) {
+      throw new Error(`No website found for domain: ${domain}`);
+    }
+    const username = (list[0] as { username?: string }).username;
+    if (!username || typeof username !== 'string') {
+      throw new Error(`username ausente na resposta /websites?domain=${domain}`);
+    }
+    return username;
+  }
+
+  /**
+   * Fetch credentials TUS pro upload de files.
+   * POST /files/upload-urls com {username, domain} → {uploadUrl, authToken, authRestToken}.
+   * `uploadUrl` aponta pra `https://srv<N>-files.hstgr.io/rest/<sessionToken>/api/tus/public_html`.
+   */
+  private async fetchUploadCredentials(
+    username: string,
+    domain: string,
+  ): Promise<TusCredentials> {
+    const url = `${HOSTINGER_API_BASE}/files/upload-urls`;
+    const resp = await this.fetchJson<Record<string, unknown>>(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, domain }),
+    });
+
+    const uploadUrl = String(resp.uploadUrl ?? resp.upload_url ?? '');
+    const authToken = String(resp.authToken ?? resp.auth_token ?? '');
+    const authRestToken = String(resp.authRestToken ?? resp.auth_rest_token ?? '');
+
+    if (!uploadUrl || !authToken || !authRestToken) {
+      throw new Error(
+        `upload-urls response missing credentials: keys=${Object.keys(resp).join(',')}`,
+      );
+    }
+    return { uploadUrl, authToken, authRestToken };
+  }
+
+  /**
+   * Walk recursivo do pluginPath, retornando paths absolutos de TODOS os arquivos
+   * (não dirs). Ordem determinística (sort) — facilita debug e idempotência audit.
+   */
+  private async walkPluginFiles(pluginPath: string): Promise<string[]> {
+    const out: string[] = [];
+
+    const recurse = async (dir: string): Promise<void> => {
+      const entries = await readdir(dir, { withFileTypes: true });
+      // Ordem determinística
+      entries.sort((a, b) => a.name.localeCompare(b.name));
+      for (const entry of entries) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await recurse(full);
+        } else if (entry.isFile()) {
+          out.push(full);
+        }
+        // symlinks/socket/etc ignorados
+      }
+    };
+
+    const rootStat = await stat(pluginPath);
+    if (!rootStat.isDirectory()) {
+      throw new Error(`pluginPath não é diretório: ${pluginPath}`);
+    }
+    await recurse(pluginPath);
+    return out;
+  }
+
+  /**
+   * Upload TUS de 1 arquivo. Como plugin gtm4wp-mentoria tem arquivos pequenos
+   * (<10MB), uploadamos em 1 chunk (sem resumable). Protocolo:
+   *
+   *   1. POST {uploadUrl}/{remotePath}?override=true
+   *      Headers: X-Auth, X-Auth-Rest, upload-length: <size>, upload-offset: 0
+   *      Body: '' (vazio)
+   *      → 201 Created (resource criado)
+   *
+   *   2. PATCH mesmo URL
+   *      Headers: X-Auth, X-Auth-Rest, Tus-Resumable: 1.0.0,
+   *               Upload-Offset: 0, Content-Type: application/offset+octet-stream
+   *      Body: file bytes
+   *      → 204 No Content (upload finalizado)
+   */
+  private async uploadFileTus(
+    absPath: string,
+    remotePath: string,
+    creds: TusCredentials,
+  ): Promise<void> {
+    const buf = await readFile(absPath);
+    const size = buf.byteLength;
+
+    const cleanUrl = creds.uploadUrl.replace(/\/$/, '');
+    const target = `${cleanUrl}/${remotePath}?override=true`;
+
+    const baseHeaders: Record<string, string> = {
+      'X-Auth': creds.authToken,
+      'X-Auth-Rest': creds.authRestToken,
+    };
+
+    // 1. Pre-upload POST (create resource)
+    const createResp = await this.tusRequest(target, {
+      method: 'POST',
+      headers: {
+        ...baseHeaders,
+        'Upload-Length': String(size),
+        'Upload-Offset': '0',
+        'Tus-Resumable': '1.0.0',
+      },
+      body: '',
+    });
+    if (createResp.status !== 201) {
+      const text = await this.safeReadText(createResp);
+      throw new HostingerHttpError(
+        createResp.status,
+        `TUS pre-upload POST falhou (${createResp.status}): ${this.truncate(text, 200)}`,
+        { body: text },
+      );
+    }
+
+    // 2. PATCH upload bytes
+    const patchResp = await this.tusRequest(target, {
+      method: 'PATCH',
+      headers: {
+        ...baseHeaders,
+        'Tus-Resumable': '1.0.0',
+        'Upload-Offset': '0',
+        'Content-Type': 'application/offset+octet-stream',
+      },
+      // Buffer é compatível com BodyInit no Node 22
+      body: buf as unknown as BodyInit,
+    });
+    if (patchResp.status !== 204 && patchResp.status !== 200) {
+      const text = await this.safeReadText(patchResp);
+      throw new HostingerHttpError(
+        patchResp.status,
+        `TUS PATCH falhou (${patchResp.status}): ${this.truncate(text, 200)}`,
+        { body: text },
+      );
+    }
+  }
+
+  /** Wrapper fetch p/ TUS (NÃO seta Bearer — TUS usa X-Auth headers próprios). */
+  private async tusRequest(
+    url: string,
+    init: { method: string; headers: Record<string, string>; body: BodyInit },
+  ): Promise<Response> {
+    const timeoutSignal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
+    try {
+      return await fetch(url, {
+        method: init.method,
+        headers: init.headers,
+        body: init.body,
+        signal: timeoutSignal,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'TimeoutError') {
+        throw new HostingerHttpError(
+          0,
+          `TUS request timeout após ${FETCH_TIMEOUT_MS}ms: ${url}`,
+        );
+      }
+      throw err;
+    }
+  }
+
+  private async safeReadText(resp: Response): Promise<string> {
+    try {
+      return await resp.text();
+    } catch {
+      return '';
+    }
+  }
+
+  /** Random 8 chars base64-url-safe (sem `+`, `/`, `=`). Match MCP semantics. */
+  private generateRandomSuffix(length: number): string {
+    return randomBytes(length)
+      .toString('base64')
+      .replace(/[+/=]/g, '')
+      .substring(0, length);
+  }
 
   private normalizeSite(raw: HostingerWebsiteRaw): Site {
     const isWp =
