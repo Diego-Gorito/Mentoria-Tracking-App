@@ -12,20 +12,20 @@ import { Hono } from 'hono'
 import { supabaseAdmin } from './db'
 import { authMiddleware, getAuthCtx } from './middleware'
 import { getCostProvider, supportedCostPlatforms } from '../lib/costsync/registry'
+import { sealDecrypt } from '../lib/storage/crypto'
 import type { AdAccountConn, CostSyncResult } from '../lib/costsync/types'
 
-// Tenant do Diego (Colégio Mentoria) — único que usa o System User Token do .env.
-// Guarda anti-vazamento: o token do .env NUNCA é usado pra outro tenant.
-// SaaS: cada tenant terá seu token cifrado em core.tenant_integrations_meta.
-const MENTORIA_TENANT_ID = '93031821-455e-490b-92c9-1ccbebf1b30f'
-
-/** Resolve a credencial (token) pra uma plataforma+tenant. null = não conectado. */
-function resolveCredential(platform: string, tenantId: string): string | null {
-  if (platform === 'meta' && tenantId === MENTORIA_TENANT_ID) {
-    return process.env.META_SYSTEM_USER_TOKEN ?? null
-  }
-  // TODO SaaS: resolver por tenant via core.tenant_integrations_meta (decrypt libsodium).
-  return null
+/**
+ * Decifra o token de uma conta (libsodium sealed_box) com as keys do servidor.
+ * O token cifrado vive em tracking.ad_accounts.token_encrypted, isolado por tenant
+ * (RLS). NUNCA há token em plaintext no banco nem token global no env — cada escola
+ * tem o seu, cifrado em repouso. @see docs/adr-0011 §5b.
+ */
+async function decryptAccountToken(tokenEncrypted: string): Promise<string> {
+  const pub = process.env.STORAGE_ENCRYPTION_PUBLIC_KEY
+  const sec = process.env.STORAGE_ENCRYPTION_SECRET_KEY
+  if (!pub || !sec) throw new Error('STORAGE_ENCRYPTION keys ausentes no env')
+  return sealDecrypt(tokenEncrypted, pub, sec)
 }
 
 interface AdAccountRow {
@@ -33,6 +33,7 @@ interface AdAccountRow {
   brand_slug: string | null
   platform: string
   external_account_id: string
+  token_encrypted: string | null
 }
 
 /** Sincroniza o custo de todas as contas conectadas de um tenant. READ-ONLY. */
@@ -51,7 +52,7 @@ export async function runCostSync(
   const { data: accounts, error } = await supabaseAdmin
     .schema('tracking')
     .from('ad_accounts')
-    .select('tenant_id,brand_slug,platform,external_account_id')
+    .select('tenant_id,brand_slug,platform,external_account_id,token_encrypted')
     .eq('tenant_id', tenantId)
     .eq('status', 'connected')
 
@@ -65,10 +66,22 @@ export async function runCostSync(
     const bucket = result.byPlatform[platform]
 
     const provider = getCostProvider(platform)
-    const credential = resolveCredential(platform, tenantId)
-    if (!provider || !credential) {
+    if (!provider) {
       result.accountsSkipped++
-      bucket.error = !provider ? 'no_provider' : 'no_credential'
+      bucket.error = 'no_provider'
+      continue
+    }
+    if (!acct.token_encrypted) {
+      result.accountsSkipped++
+      bucket.error = 'no_credential'
+      continue
+    }
+    let credential: string
+    try {
+      credential = await decryptAccountToken(acct.token_encrypted)
+    } catch {
+      result.accountsSkipped++
+      bucket.error = 'decrypt_failed'
       continue
     }
 
