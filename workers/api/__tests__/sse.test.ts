@@ -103,7 +103,7 @@ async function seedInstallation(
 function rpopPolling(): PopEventFn {
   return async (redis, key, timeoutMs) => {
     const deadline = Date.now() + timeoutMs;
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const val = (await (redis as any).rpop(key)) as string | null;

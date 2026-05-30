@@ -35,7 +35,7 @@ export function getRedis(overrides?: RedisOptions): RedisClient {
   // Logs caem em stderr; observabilidade real fica a cargo do helper de log
   // do caller (não escopo desta camada de storage).
   cachedClient.on('error', (err: Error) => {
-    // eslint-disable-next-line no-console
+
     console.error('[redis] connection error:', err.message);
   });
 

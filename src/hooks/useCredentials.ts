@@ -83,7 +83,7 @@ export function useCredentials(): {
       })
 
     return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [tenant?.tenantId, tenantLoading, tick])
 
   return { credentials, loading, error, refresh }

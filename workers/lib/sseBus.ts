@@ -104,7 +104,7 @@ export async function publishEvent(
   } catch (err) {
     // F-S12 AC-2: publish best-effort. Pipeline continua mesmo se Redis cair.
     const msg = err instanceof Error ? err.message : String(err);
-    // eslint-disable-next-line no-console
+
     console.error(
       `[sseBus] publishEvent_failed id=${installationId} step=${event.step} msg=${msg}`,
     );

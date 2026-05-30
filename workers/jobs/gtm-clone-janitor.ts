@@ -49,9 +49,9 @@ export interface JanitorResult {
 
 const DEFAULT_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_LOGGER = {
-  // eslint-disable-next-line no-console
+
   info: (msg: string, meta?: unknown) => console.info(`[janitor] ${msg}`, meta ?? ''),
-  // eslint-disable-next-line no-console
+
   error: (msg: string, meta?: unknown) => console.error(`[janitor] ${msg}`, meta ?? ''),
 };
 

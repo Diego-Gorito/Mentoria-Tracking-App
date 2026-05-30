@@ -108,7 +108,7 @@ interface FetchScenario {
 }
 
 function makeFakeFetch(scenario: FetchScenario): typeof fetch {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   return (async (url: string | URL): Promise<Response> => {
     const u = typeof url === 'string' ? url : url.toString();
 
