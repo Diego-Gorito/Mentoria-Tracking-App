@@ -1,7 +1,7 @@
 // DashboardKpis — 6 KPI cards com dados reais do Worker /api/analytics/summary
 // Skeleton loading + empty state quando sem dados + error state com retry.
 
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useEffect } from 'react'
 import {
   Users,
   Target,
@@ -12,8 +12,9 @@ import {
 } from '@phosphor-icons/react'
 import type { Icon } from '@phosphor-icons/react'
 import { useAnalyticsSummary } from '@/hooks/useAnalytics'
-import type { Period } from '@/hooks/useAnalytics'
+import type { SummaryResponse } from '@/hooks/useAnalytics'
 import { ErrorState } from '@/components/ui/ErrorState'
+import type { DashboardRange } from '@/lib/dashboardRange'
 
 type Tone = 'neutral' | 'success' | 'warning' | 'danger'
 
@@ -62,9 +63,21 @@ function KpiSkeleton() {
   )
 }
 
-export function DashboardKpis({ windowDays }: { windowDays: number }) {
-  const period: Period = windowDays === 7 ? '7d' : windowDays === 90 ? '90d' : '30d'
-  const { data, loading, error } = useAnalyticsSummary(period)
+type KpiProps = {
+  range: DashboardRange
+  refreshKey: number
+  /** Reporta o summary pro Dashboard (decide empty-state global). Sem double-fetch. */
+  onData?: (data: SummaryResponse | null) => void
+}
+
+export function DashboardKpis({ range, refreshKey, onData }: KpiProps) {
+  const windowDays = range.days
+  const { data, loading, error } = useAnalyticsSummary(range.apiPeriod, refreshKey)
+
+  // Reporta o summary pra cima sempre que mudar (empty-state global no Dashboard).
+  useEffect(() => {
+    onData?.(data)
+  }, [data, onData])
 
   // refetch: recriar o hook triggering via key seria ideal, mas aqui usamos um
   // workaround simples — recarregar a página é aceitável em erro de rede.
@@ -76,11 +89,16 @@ export function DashboardKpis({ windowDays }: { windowDays: number }) {
     const { leads_total, leads_delta_pct, conversions_total, conversions_value_brl,
             spend_brl, roas, cpl_brl, dispatch_health_pct } = data
 
+    // Os KPIs são agregados (não série diária), então refletem o bucket de API
+    // (period_days do backend), não o range custom exato. Usar period_days no
+    // hint mantém o número honesto com o dado mostrado.
+    const windowLabel = data.period_days || windowDays
+
     return [
       {
         label: 'Leads totais',
         value: leads_total.toLocaleString('pt-BR'),
-        hint: `Últimos ${windowDays} dias`,
+        hint: `Últimos ${windowLabel} dias`,
         icon: Users,
         delta: formatDelta(leads_delta_pct),
       },

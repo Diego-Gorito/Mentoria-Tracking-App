@@ -8,7 +8,10 @@ import {
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ChartLineDown, ChartBar, ChartPieSlice } from '@phosphor-icons/react'
 import { useAnalyticsFunnel, useAnalyticsRoiPlatforms, useAnalyticsChannels } from '@/hooks/useAnalytics'
-import type { Period } from '@/hooks/useAnalytics'
+import { type DashboardRange, clipDailyToRange } from '@/lib/dashboardRange'
+
+// Props comuns dos charts — range global + chave de refresh.
+type ChartProps = { range: DashboardRange; refreshKey: number }
 
 // Design tokens — dark background safe
 const COLORS = {
@@ -67,9 +70,9 @@ function DarkTooltip({ active, payload, label }: {
 
 // --- Funil diário ---
 
-function FunnelChart({ period }: { period: Period }) {
-  const { data, loading } = useAnalyticsFunnel(period)
-  const rows = data?.data ?? []
+function FunnelChart({ range, refreshKey }: ChartProps) {
+  const { data, loading } = useAnalyticsFunnel(range.apiPeriod, refreshKey)
+  const rows = clipDailyToRange(data?.data ?? [], range)
 
   if (loading) return <ChartSkeleton />
 
@@ -107,8 +110,9 @@ function FunnelChart({ period }: { period: Period }) {
 
 // --- ROAS por plataforma ---
 
-function RoasPlatformChart({ period }: { period: Period }) {
-  const { data, loading } = useAnalyticsRoiPlatforms(period)
+function RoasPlatformChart({ range, refreshKey }: ChartProps) {
+  // ROAS é agregado por plataforma (sem série diária) — não recorta por range.
+  const { data, loading } = useAnalyticsRoiPlatforms(range.apiPeriod, refreshKey)
   const rows = data?.data ?? []
 
   if (loading) return <ChartSkeleton />
@@ -144,9 +148,9 @@ function RoasPlatformChart({ period }: { period: Period }) {
 
 // --- Leads por canal ---
 
-function ChannelsChart({ period }: { period: Period }) {
-  const { data, loading } = useAnalyticsChannels(period)
-  const rows = data?.data ?? []
+function ChannelsChart({ range, refreshKey }: ChartProps) {
+  const { data, loading } = useAnalyticsChannels(range.apiPeriod, refreshKey)
+  const rows = clipDailyToRange(data?.data ?? [], range)
 
   if (loading) return <ChartSkeleton />
 
@@ -186,12 +190,12 @@ function ChannelsChart({ period }: { period: Period }) {
 
 // --- Export principal ---
 
-export function DashboardCharts({ period }: { period: Period }) {
+export function DashboardCharts({ range, refreshKey }: ChartProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-      <FunnelChart period={period} />
-      <RoasPlatformChart period={period} />
-      <ChannelsChart period={period} />
+      <FunnelChart range={range} refreshKey={refreshKey} />
+      <RoasPlatformChart range={range} refreshKey={refreshKey} />
+      <ChannelsChart range={range} refreshKey={refreshKey} />
     </div>
   )
 }

@@ -102,13 +102,14 @@ const TD = 'px-6 py-3 text-body-sm text-fg-on-dark border-t border-white/[0.04]'
 
 // --- Leads recentes ---
 
-function LeadsTable() {
-  const { data, loading, error } = useAnalyticsLeadsRecent(20)
+function LeadsTable({ refreshKey }: { refreshKey: number }) {
+  const { data, loading, error } = useAnalyticsLeadsRecent(20, refreshKey)
   const leads: LeadRecent[] = data?.data ?? []
 
   return (
     <TableCard title="Leads recentes" subtitle="Top 20 mais quentes (PII mascarada)">
-      <table className="w-full">
+      {/* min-w garante scroll horizontal no mobile em vez de espremer colunas */}
+      <table className="w-full min-w-[420px]">
         <thead>
           <tr className="bg-white/[0.02]">
             <th scope="col" className={TH}>Lead</th>
@@ -167,13 +168,14 @@ function LeadsTable() {
 
 // --- Dispatches em falha ---
 
-function DispatchesTable() {
-  const { data, loading, error } = useAnalyticsDispatchesFailed(20)
+function DispatchesTable({ refreshKey }: { refreshKey: number }) {
+  const { data, loading, error } = useAnalyticsDispatchesFailed(20, refreshKey)
   const dispatches: DispatchFailed[] = data?.data ?? []
 
   return (
     <TableCard title="Dispatches em falha" subtitle="retry_count >= 3">
-      <table className="w-full">
+      {/* min-w garante scroll horizontal no mobile em vez de espremer colunas */}
+      <table className="w-full min-w-[520px]">
         <thead>
           <tr className="bg-white/[0.02]">
             <th scope="col" className={TH}>Provider</th>
@@ -233,11 +235,11 @@ function DispatchesTable() {
 
 // --- Export principal ---
 
-export function DashboardTables() {
+export function DashboardTables({ refreshKey }: { refreshKey: number }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <LeadsTable />
-      <DispatchesTable />
+      <LeadsTable refreshKey={refreshKey} />
+      <DispatchesTable refreshKey={refreshKey} />
     </div>
   )
 }
