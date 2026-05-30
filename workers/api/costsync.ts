@@ -188,8 +188,10 @@ export async function runCostSyncAllTenants(datePreset = 'last_30d', trigger = '
 let costSyncTimer: ReturnType<typeof setInterval> | null = null
 export function startCostSyncScheduler(intervalMs = 6 * 60 * 60 * 1000): void {
   if (process.env.NODE_ENV === 'test' || costSyncTimer) return
+  // last_90d (não 30d): escolas fazem campanhas sazonais (matrícula/vestibular) —
+  // 90 dias cobrem uma temporada de gasto esporádico. Upsert idempotente, read sem custo.
   const run = () =>
-    runCostSyncAllTenants('last_30d')
+    runCostSyncAllTenants('last_90d')
       .then((r) =>
         console.log(`[cost-sync] ${r.tenants} tenant(s), ${r.campaignsUpserted} campanhas sincronizadas`),
       )
