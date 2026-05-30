@@ -5,10 +5,11 @@
 import { useState } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { useTenant } from '@/hooks/useTenant'
+import { useSites } from '@/hooks/useSites'
 import { DashboardKpis } from './DashboardKpis'
 import { DashboardCharts } from './DashboardCharts'
 import { DashboardTables } from './DashboardTables'
-import { Calendar } from '@phosphor-icons/react'
+import { Calendar, Plus, GlobeHemisphereWest } from '@phosphor-icons/react'
 
 type Props = {
   onNavigate?: (href: string) => void
@@ -24,10 +25,51 @@ const WINDOW_OPTIONS: { value: WindowDays; label: string }[] = [
 
 export function Dashboard({ onNavigate }: Props) {
   const { tenant } = useTenant()
+  const { sites } = useSites()
   const [windowDays, setWindowDays] = useState<WindowDays>(30)
+
+  // Refactor onboarding-v2 (2026-05-29): banner discreto "adicionar mais sites"
+  // aparece quando o user já tem pelo menos 1 site instalado. Pula o wizard de
+  // novo — multi-site reusa o mesmo flow /sites/connect.
+  const installedCount = sites.filter(
+    (s) => s.status === 'installed' || s.status === 'uploaded_pending_activation',
+  ).length
 
   return (
     <AppShell activePath="/dashboard" onNavigate={onNavigate}>
+      {/* Onboarding v2 banner — "Adicionar mais sites".
+          Só renderiza quando o user já passou pelo wizard com sucesso (tem
+          pelo menos 1 site). Discreto, pequeno, dismissable na próxima
+          iteração (Era 1.5). */}
+      {installedCount > 0 && (
+        <div
+          className="mb-4 rounded-lg border border-brand-green/20 bg-brand-green/[0.04] px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap"
+          role="region"
+          aria-label="Adicionar mais sites"
+        >
+          <div className="flex items-center gap-2 text-body-sm text-fg-on-dark">
+            <GlobeHemisphereWest
+              size={16}
+              weight="duotone"
+              className="text-brand-green shrink-0"
+              aria-hidden="true"
+            />
+            <span>
+              {installedCount} site{installedCount !== 1 ? 's' : ''} com tracking.
+              Quer instalar em mais?
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate?.('sites/connect')}
+            className="inline-flex items-center gap-1.5 text-body-sm font-medium text-brand-green hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-green rounded"
+          >
+            <Plus size={12} weight="bold" aria-hidden="true" />
+            Adicionar mais sites →
+          </button>
+        </div>
+      )}
+
       {/* Page header */}
       <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
         <div>

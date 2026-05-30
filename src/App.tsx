@@ -2,7 +2,7 @@
 // Auth routes (login/signup/magic-link/onboarding) pertencem ao Dex — NÃO alterar.
 // Routes de app (dashboard/tracking/conversoes/integracoes/leads/configuracoes) — Uma.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ThemeProvider } from '@/lib/theme'
 import { SpotlightProvider } from '@/lib/spotlight'
 import { ToastProvider } from '@/components/ui/Toast'
@@ -15,6 +15,10 @@ import { Login } from '@/routes/auth/Login'
 import { Signup } from '@/routes/auth/Signup'
 import { MagicLink } from '@/routes/auth/MagicLink'
 import { Wizard } from '@/routes/onboarding/Wizard'
+// Onboarding V2 (install-first) — refactor 2026-05-29.
+// Default pra novos users; /onboarding V1 mantido como fallback.
+import { WizardV2 } from '@/routes/onboarding-v2/WizardV2'
+import { isOnboardingV2Complete } from '@/hooks/useOnboardingV2'
 
 // App routes — Uma
 import { Dashboard } from '@/routes/dashboard/Dashboard'
@@ -40,6 +44,7 @@ type Route =
   | 'signup'
   | 'magic-link'
   | 'onboarding'
+  | 'onboarding-v2'
   | 'dashboard'
   | 'tracking'
   | 'conversoes'
@@ -97,7 +102,9 @@ function resolveInitialRoute(): Route {
   if (path === '/magic-link') return 'magic-link'
   if (!isAuthenticated()) return 'login'
 
-  // Onboarding
+  // Onboarding V2 (install-first) — refactor 2026-05-29.
+  // Match `/onboarding-v2` ANTES de `/onboarding` (mais específico primeiro).
+  if (path.startsWith('/onboarding-v2')) return 'onboarding-v2'
   if (path.startsWith('/onboarding')) return 'onboarding'
 
   // App routes
@@ -117,6 +124,7 @@ const VALID_ROUTES: Route[] = [
   'login',
   'signup',
   'magic-link',
+  'onboarding-v2',
   'onboarding',
   'dashboard',
   'tracking',
@@ -163,6 +171,7 @@ export function App() {
     signup: '/signup',
     'magic-link': '/magic-link',
     onboarding: '/onboarding',
+    'onboarding-v2': '/onboarding-v2',
     dashboard: '/dashboard',
     tracking: '/tracking',
     conversoes: '/conversoes',
@@ -219,7 +228,7 @@ export function App() {
               )}
               {route === 'signup' && (
                 <Signup
-                  onSignup={() => navigate('onboarding')}
+                  onSignup={() => navigate('onboarding-v2')}
                   onGoLogin={() => navigate('login')}
                 />
               )}
@@ -231,6 +240,20 @@ export function App() {
                   onComplete={() => navigate('dashboard')}
                   onNavigate={navigate}
                 />
+              )}
+              {route === 'onboarding-v2' && (
+                isOnboardingV2Complete() ? (
+                  // Gate: se onboarding V2 já foi finalizado, manda pro dashboard.
+                  // (Evita re-entrada acidental no wizard via deep link.)
+                  // Side effect via redirect manual no render.
+                  // useEffect equivalent via window.location pra refletir state limpo.
+                  <RedirectToDashboard onRedirect={() => navigate('dashboard')} />
+                ) : (
+                  <WizardV2
+                    onComplete={() => navigate('dashboard')}
+                    onNavigate={navigate}
+                  />
+                )
               )}
 
               {/* ── App routes (Uma) ─────────────────────────── */}
@@ -356,3 +379,22 @@ export function App() {
 }
 
 export default App
+
+/**
+ * RedirectToDashboard — helper inline pra gate `/onboarding-v2` quando user já
+ * completou. Dispara navigate('dashboard') 1× no mount via useEffect.
+ *
+ * Não usa <Navigate> (não tem react-router-dom) — dispatch via callback.
+ */
+function RedirectToDashboard({ onRedirect }: { onRedirect: () => void }) {
+  useEffect(() => {
+    onRedirect()
+    // 1× no mount; onRedirect deve ser estável (callback do parent navigate).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
+    </div>
+  )
+}
