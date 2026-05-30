@@ -59,4 +59,6 @@ export function isBrandSlug(value: unknown): value is BrandSlug {
  * Plugin version snapshot — gravado em cada installation pra audit/drift
  * detection (F-S05 AC-5 + F-S13). Atualizado quando F-S13 publicar build novo.
  */
-export const DEFAULT_PLUGIN_VERSION = 'gtm4wp-1.18+bootstrap-v1' as const;
+// F-S14 #5 (task #68): bump pra v2 — bootstrap agora renderiza GTM inline
+// standalone quando GTM4WP upstream ausente (antes só configurava options).
+export const DEFAULT_PLUGIN_VERSION = 'gtm4wp-1.18+bootstrap-v2' as const;
