@@ -1,14 +1,22 @@
 name: CI
 
+# Otimizado pra economia de minutos GitHub Actions Pro (3000 min/mês free).
+# - Roda SÓ em PR pra main (não em push direto, evita rodar 2× pro mesmo commit).
+# - Tests + lint + build TypeScript (~2-3min com cache).
+# - concurrency cancela runs anteriores se PR receber novos commits (economia ~50%).
+
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -18,16 +26,16 @@ jobs:
           cache: 'npm'
 
       - name: Install deps
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --no-fund
 
-      - name: Build (Vite)
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check workers
+        run: npx tsc --noEmit -p tsconfig.worker.json
+
+      - name: Tests
+        run: npx vitest run --no-coverage
+
+      - name: Build (Vite frontend)
         run: npm run build
-
-      - name: Worker dry-run
-        run: |
-          cd workers
-          # Instala deps do worker se houver package.json separado
-          if [ -f package.json ]; then npm ci; fi
-          # dry-run valida syntax/bundling sem fazer deploy real
-          # || true: tolera falha de auth (sem CLOUDFLARE_API_TOKEN em CI ainda)
-          npx wrangler deploy --dry-run --outdir=.wrangler-dryrun || true

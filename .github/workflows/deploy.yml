@@ -1,0 +1,66 @@
+name: Deploy
+
+# Deploy automático pra Easypanel após merge na main.
+# Custo mínimo: 1 curl pra tRPC + 1 poll de health = ~30s por deploy.
+# Não roda CI tests aqui (já rodou no PR via ci.yml).
+
+on:
+  push:
+    branches: [main]
+
+# Cancela deploy anterior se push novo chegar (último push wins).
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-tracking-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Easypanel deploy tracking-api
+        env:
+          EASYPANEL_URL: https://panel.colegiomentoria.com.br
+          EASYPANEL_TOKEN: ${{ secrets.EASYPANEL_TOKEN }}
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $EASYPANEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"json":{"projectName":"evolution","serviceName":"tracking-api"}}' \
+            "$EASYPANEL_URL/api/trpc/services.app.deployService" > /dev/null
+          echo "✅ tracking-api deploy triggered"
+
+      - name: Wait for health 200 (max 90s)
+        run: |
+          for i in $(seq 1 9); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+              https://tracking.colegiomentoria.com.br/api/health)
+            echo "  attempt=$i health=$CODE"
+            [ "$CODE" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "::warning::Health 200 não alcançado em 90s. Deploy disparado mas verificar manualmente."
+          exit 0  # não falha workflow — Easypanel pode estar levando mais tempo
+
+  deploy-tracking-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Só roda se arquivos do frontend mudaram (economia)
+    if: |
+      contains(github.event.head_commit.modified, 'src/') ||
+      contains(github.event.head_commit.modified, 'public/') ||
+      contains(github.event.head_commit.modified, 'index.html') ||
+      contains(github.event.head_commit.modified, 'vite.config.ts') ||
+      contains(github.event.head_commit.modified, 'package.json')
+    steps:
+      - name: Trigger Easypanel deploy tracking-app
+        env:
+          EASYPANEL_URL: https://panel.colegiomentoria.com.br
+          EASYPANEL_TOKEN: ${{ secrets.EASYPANEL_TOKEN }}
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $EASYPANEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"json":{"projectName":"evolution","serviceName":"tracking-app"}}' \
+            "$EASYPANEL_URL/api/trpc/services.app.deployService" > /dev/null
+          echo "✅ tracking-app deploy triggered"
