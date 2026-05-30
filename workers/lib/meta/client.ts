@@ -54,6 +54,14 @@ export interface MetaPixel {
   last_fired_time: string | null;
 }
 
+export interface MetaCampaignInsight {
+  campaign_id: string;
+  campaign_name: string;
+  /** spend é string decimal na moeda da conta (ex "835.89"). */
+  spend: string;
+  account_currency: string;
+}
+
 // ─── Graph error parsing ────────────────────────────────────────────────────
 
 interface GraphErrorBody {
@@ -251,6 +259,54 @@ export class MetaClient {
           id: p.id,
           name: p.name ?? p.id,
           last_fired_time: p.last_fired_time ?? null,
+        });
+      }
+      after = page.paging?.next ? page.paging?.cursors?.after : undefined;
+    } while (after);
+
+    return out;
+  }
+
+  /**
+   * Insights de CUSTO por campanha (GET /{ad_account}/insights, level=campaign).
+   * Retorna spend (string decimal na moeda da conta) por campanha no período.
+   * READ-ONLY — usado pelo cost-sync (#73). Pagina via cursor. @see docs/adr-0011 §5b.
+   */
+  async listCampaignInsights(
+    token: string,
+    adAccountId: string,
+    datePreset = 'last_30d',
+  ): Promise<MetaCampaignInsight[]> {
+    const acct = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
+    const out: MetaCampaignInsight[] = [];
+    let after: string | undefined;
+
+    do {
+      const params: Record<string, string> = {
+        level: 'campaign',
+        fields: 'campaign_id,campaign_name,spend,account_currency',
+        date_preset: datePreset,
+        limit: '500',
+      };
+      if (after) params.after = after;
+
+      const page = await this.graphGet<{
+        data?: Array<{
+          campaign_id?: string;
+          campaign_name?: string;
+          spend?: string;
+          account_currency?: string;
+        }>;
+        paging?: { cursors?: { after?: string }; next?: string };
+      }>(`/${acct}/insights`, token, params);
+
+      for (const r of page.data ?? []) {
+        if (!r.campaign_id) continue;
+        out.push({
+          campaign_id: r.campaign_id,
+          campaign_name: r.campaign_name ?? r.campaign_id,
+          spend: r.spend ?? '0',
+          account_currency: r.account_currency ?? 'BRL',
         });
       }
       after = page.paging?.next ? page.paging?.cursors?.after : undefined;

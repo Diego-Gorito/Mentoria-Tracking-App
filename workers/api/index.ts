@@ -30,6 +30,7 @@ import sitesRouter from './sites'
 import installationsRouter from './installations'
 import gtmRouter from './gtm'
 import metaRouter from './meta'
+import costSyncRouter from './costsync'
 import { authMiddleware, getAuthCtx } from './middleware'
 import { requestIdMiddleware } from './requestId'
 import { errorHandler } from './errorHandler'
@@ -96,6 +97,9 @@ app.route('/api/gtm', gtmRouter)
 
 // --- Meta (Facebook) Ads connector (System User Token paste, MVP sem OAuth) ---
 app.route('/api/meta', metaRouter)
+
+// --- Cost sync (custo de ad platforms → campaigns, READ-ONLY) ADR-0011 §5b ---
+app.route('/api/cost-sync', costSyncRouter)
 
 // --- /api/me (autenticado) ---
 
