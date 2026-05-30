@@ -134,15 +134,24 @@ describe('GtmApiClient', () => {
   });
 
   it('copyContainerContents conflict em template não bloqueia clone', async () => {
-    // 1. list templates source → 2 templates
-    // 2. createTemplate #1 → conflict
-    // 3. createTemplate #2 → success
-    // 4. list vars source → 1 var
-    // 5. createVariable → success
-    // 6. list triggers → 0
-    // 7. list clients → 0
-    // 8. list tags → 0
+    // FIX 2026-05-28 (commit fbb75b6): copyContainerContents agora chama
+    // listBuiltInVariables(source) + listBuiltInVariables(target) ANTES dos
+    // templates pra detectar built-ins faltantes no clone. Mock precisa de
+    // 2 calls adicionais com `builtInVariable: []` (sem missing builtins).
+    //  1. list builtins source → 0
+    //  2. list builtins target → 0 (igual = no enableBuiltInVariables call)
+    //  3. list templates source → 2 templates
+    //  4. createTemplate #1 → conflict
+    //  5. createTemplate #2 → success
+    //  6. list vars source → 1 var
+    //  7. list vars target → 0
+    //  8. createVariable → success
+    //  9. list triggers source → 0
+    // 10. list clients source → 0
+    // 11. list tags source → 0
     const fetchImpl = mockFetch([
+      { status: 200, body: { builtInVariable: [] } },
+      { status: 200, body: { builtInVariable: [] } },
       {
         status: 200,
         body: { template: [
@@ -153,6 +162,7 @@ describe('GtmApiClient', () => {
       { status: 409, body: { error: { message: 'already exists' } } },
       { status: 200, body: { templateId: '99', name: 'T2', templateData: 'data2' } },
       { status: 200, body: { variable: [{ variableId: '10', name: 'V1', type: 'c' }] } },
+      { status: 200, body: { variable: [] } },
       { status: 200, body: { variableId: '50', name: 'V1', type: 'c' } },
       { status: 200, body: { trigger: [] } },
       { status: 200, body: { client: [] } },
