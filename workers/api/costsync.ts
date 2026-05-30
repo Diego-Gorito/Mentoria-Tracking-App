@@ -132,21 +132,53 @@ export async function runCostSync(
   return result
 }
 
-/** Sincroniza TODOS os tenants com contas conectadas. Usado pelo cron. */
-export async function runCostSyncAllTenants(datePreset = 'last_30d') {
-  const { data, error } = await supabaseAdmin
-    .schema('tracking')
-    .from('ad_accounts')
-    .select('tenant_id')
-    .eq('status', 'connected')
-  if (error) throw new Error(`ad_accounts query failed: ${error.message}`)
-  const tenantIds = [...new Set((data ?? []).map((r) => (r as { tenant_id: string }).tenant_id))]
-  const results: CostSyncResult[] = []
-  for (const t of tenantIds) results.push(await runCostSync(t, datePreset))
-  return {
-    tenants: tenantIds.length,
-    campaignsUpserted: results.reduce((s, r) => s + r.campaignsUpserted, 0),
-    results,
+/** Sincroniza TODOS os tenants com contas conectadas + grava auditoria. Usado pelo cron. */
+export async function runCostSyncAllTenants(datePreset = 'last_30d', trigger = 'cron') {
+  const startedAt = new Date().toISOString()
+  try {
+    const { data, error } = await supabaseAdmin
+      .schema('tracking')
+      .from('ad_accounts')
+      .select('tenant_id')
+      .eq('status', 'connected')
+    if (error) throw new Error(`ad_accounts query failed: ${error.message}`)
+    const tenantIds = [...new Set((data ?? []).map((r) => (r as { tenant_id: string }).tenant_id))]
+    const results: CostSyncResult[] = []
+    for (const t of tenantIds) results.push(await runCostSync(t, datePreset))
+    const summary = {
+      tenants: tenantIds.length,
+      campaignsUpserted: results.reduce((s, r) => s + r.campaignsUpserted, 0),
+      results,
+    }
+    // Auditoria (sem PII/token) — detail leva o byPlatform com erros (decrypt_failed etc).
+    await supabaseAdmin.schema('tracking').from('cost_sync_runs').insert({
+      started_at: startedAt,
+      finished_at: new Date().toISOString(),
+      trigger,
+      tenants: summary.tenants,
+      campaigns_upserted: summary.campaignsUpserted,
+      ok: true,
+      detail: {
+        byTenant: results.map((r) => ({
+          tenant: r.tenantId,
+          processed: r.accountsProcessed,
+          skipped: r.accountsSkipped,
+          byPlatform: r.byPlatform,
+        })),
+      },
+    })
+    return summary
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    await supabaseAdmin
+      .schema('tracking')
+      .from('cost_sync_runs')
+      .insert({ started_at: startedAt, finished_at: new Date().toISOString(), trigger, ok: false, error: msg })
+      .then(
+        () => {},
+        () => {},
+      )
+    throw e
   }
 }
 
