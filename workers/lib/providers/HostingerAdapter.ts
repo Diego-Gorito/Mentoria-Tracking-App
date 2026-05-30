@@ -651,15 +651,10 @@ export class HostingerAdapter implements IHostingProvider {
       ? AbortSignal.any([init.signal, timeoutSignal])
       : timeoutSignal;
 
-    let resp: Response;
-    try {
-      resp = await fetch(url, { ...init, headers, signal });
-    } catch (err) {
-      // Network error (undici) OU AbortError (timeout/caller cancel): preserva
-      // pro isRetryable detectar. AbortError com `name: 'TimeoutError'` vem
-      // do AbortSignal.timeout — withRetry retenta como 5xx-like.
-      throw err;
-    }
+    // Network error (undici) OU AbortError (timeout/caller cancel) propagam
+    // direto pro withRetry — AbortError com `name: 'TimeoutError'` vem do
+    // AbortSignal.timeout e é retentado como 5xx-like.
+    const resp: Response = await fetch(url, { ...init, headers, signal });
 
     if (!resp.ok) {
       let body: unknown;
@@ -763,7 +758,7 @@ export class HostingerAdapter implements IHostingProvider {
 
   /** Structured JSON log → Easypanel stdout (ADR-0008 §3.7, 7d retention). */
   private logStructured(payload: Record<string, unknown>): void {
-    // eslint-disable-next-line no-console
+     
     console.log(JSON.stringify({ source: 'HostingerAdapter', ...payload }));
   }
 }

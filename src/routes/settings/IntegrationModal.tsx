@@ -126,7 +126,7 @@ function ModalBody({ platformId, meta, onClose, onSaved }: BodyProps) {
         })
       }
 
-      const status: 'configured_not_validated' = 'configured_not_validated'
+      const status = 'configured_not_validated' as const
       toast(`${meta.label} configurado! Lembre de testar a conexão.`, 'success')
       onSaved(platformId, status)
       onClose()

@@ -422,7 +422,7 @@ export function createInstallationsRouter(
           payload = await popEvent(redis, key, heartbeatMs);
         } catch (err) {
           // BRPOP error — log + sleep curto pra evitar busy loop, então tenta de novo.
-          // eslint-disable-next-line no-console
+           
           console.error(
             `[sse] popEvent_failed id=${id} msg=${(err as Error).message}`,
           );
