@@ -24,6 +24,12 @@ import {
   RateLimitError,
   TokenInvalidError,
 } from '../lib/providers/errors';
+import {
+  MetaApiError,
+  MetaPermissionError,
+  MetaRateLimitError,
+  MetaTokenInvalidError,
+} from '../lib/meta/errors';
 import { HttpError } from './errors';
 import { getRequestId } from './requestId';
 
@@ -103,6 +109,40 @@ export function errorHandler(err: Error, c: Context): Response {
     return c.json(
       makeBody('PROVIDER_ERROR', 'Erro ao falar com o provedor de hospedagem', requestId),
       err.statusCode === 502 ? 502 : (err.statusCode as 400 | 401 | 403 | 404 | 422 | 500 | 502),
+    );
+  }
+
+  // 2b. Meta Marketing API errors (sub-hierarquia em workers/lib/meta/errors.ts).
+  // NUNCA loga o token (já garantido na origem — client não inclui token em msg).
+  if (err instanceof MetaTokenInvalidError) {
+    console.warn(`[api] meta_token_invalid req=${requestId}`);
+    return c.json(
+      makeBody('META_TOKEN_INVALID', 'Token Meta inválido ou expirado — gere um novo', requestId),
+      401,
+    );
+  }
+  if (err instanceof MetaRateLimitError) {
+    if (typeof err.retryAfterSeconds === 'number') {
+      c.header('Retry-After', String(err.retryAfterSeconds));
+    }
+    console.warn(`[api] meta_rate_limit req=${requestId}`);
+    return c.json(
+      makeBody('META_RATE_LIMITED', 'Limite de requisições do Meta atingido. Tente em alguns minutos.', requestId),
+      429,
+    );
+  }
+  if (err instanceof MetaPermissionError) {
+    console.warn(`[api] meta_permission req=${requestId}`);
+    return c.json(
+      makeBody('META_PERMISSION_DENIED', 'Token Meta sem permissão. Confira os scopes ads_read e ads_management.', requestId),
+      403,
+    );
+  }
+  if (err instanceof MetaApiError) {
+    console.error(`[api] meta_api_error req=${requestId} status=${err.statusCode} msg=${err.message.slice(0, 200)}`);
+    return c.json(
+      makeBody('META_API_ERROR', 'Erro ao falar com o Meta Ads', requestId),
+      err.statusCode === 504 ? 504 : (err.statusCode as 400 | 401 | 403 | 404 | 422 | 500 | 502),
     );
   }
 

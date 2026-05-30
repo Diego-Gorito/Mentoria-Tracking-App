@@ -73,9 +73,23 @@ async function request<T>(path: string, opts: FetchOptions = {}): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(
-      (body as { error?: string }).error ?? `HTTP ${res.status} ${res.statusText}`,
-    )
+    // Backend F-S05 retorna `error` como objeto { code, message, request_id }.
+    // Legado retornava string. Suporta ambos: prefere message do objeto, depois
+    // string crua, depois HTTP status. (Sem isso, `new Error({...})` virava
+    // "[object Object]" — UX ruim em telas como o conector Meta.)
+    const errField = (body as { error?: unknown }).error
+    const message =
+      typeof errField === 'object' && errField !== null && 'message' in errField
+        ? String((errField as { message: unknown }).message)
+        : typeof errField === 'string'
+          ? errField
+          : `HTTP ${res.status} ${res.statusText}`
+    const apiError = new Error(message) as Error & { code?: string; status?: number }
+    if (typeof errField === 'object' && errField !== null && 'code' in errField) {
+      apiError.code = String((errField as { code: unknown }).code)
+    }
+    apiError.status = res.status
+    throw apiError
   }
 
   return res.json() as Promise<T>
@@ -450,4 +464,65 @@ type SyncCountsResp = {
   triggers: { created: number; updated: number; skipped: number }
   clients: { created: number; updated: number; skipped: number }
   tags: { created: number; updated: number; skipped: number }
+}
+
+// ─── Meta (Facebook) Ads connector (System User Token paste, MVP sem OAuth) ──
+
+export type MetaAdAccountView = {
+  id: string
+  name: string
+  status: number
+  business_id: string | null
+}
+
+export type MetaPixelView = {
+  id: string
+  name: string
+  last_fired_time: string | null
+}
+
+export type MetaStatus = {
+  connected: boolean
+  business_id: string | null
+  ad_account_id: string | null
+  pixel_id: string | null
+  status: string | null
+}
+
+export const metaApi = {
+  /** Estado atual da conexão (sem token). */
+  status: () => request<MetaStatus>('/api/meta/status'),
+
+  /** Valida + cifra o System User token, retorna business_id + ad accounts. */
+  connect: (token: string) =>
+    request<{ business_id: string | null; ad_accounts: MetaAdAccountView[] }>(
+      '/api/meta/connect',
+      { method: 'POST', body: JSON.stringify({ token }) },
+    ),
+
+  /** Re-lista ad accounts usando o token guardado. */
+  adAccounts: () =>
+    request<{ ad_accounts: MetaAdAccountView[] }>('/api/meta/ad-accounts'),
+
+  /** Lista pixels de uma ad account. */
+  pixels: (adAccountId: string) =>
+    request<{ pixels: MetaPixelView[] }>(
+      `/api/meta/pixels?ad_account_id=${encodeURIComponent(adAccountId)}`,
+    ),
+
+  /** Grava seleção + escreve pixel no container GTM. */
+  select: (adAccountId: string, pixelId: string) =>
+    request<{
+      ad_account_id: string
+      pixel_id: string
+      container_synced: boolean
+      detail?: string
+    }>('/api/meta/select', {
+      method: 'POST',
+      body: JSON.stringify({ ad_account_id: adAccountId, pixel_id: pixelId }),
+    }),
+
+  /** Desconecta (soft revoke por padrão). */
+  disconnect: () =>
+    request<{ status: string }>('/api/meta/disconnect', { method: 'DELETE' }),
 }

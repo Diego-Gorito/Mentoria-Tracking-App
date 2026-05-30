@@ -24,6 +24,7 @@ import { isOnboardingV2Complete } from '@/hooks/useOnboardingV2'
 import { Dashboard } from '@/routes/dashboard/Dashboard'
 import { Integrations } from '@/routes/settings/Integrations'
 import { GtmContainerPage } from '@/routes/settings/GtmContainerPage'
+import { MetaIntegrationPage } from '@/routes/settings/MetaIntegrationPage'
 import { LeadsList } from '@/routes/leads/LeadsList'
 import { LeadDetail } from '@/routes/leads/LeadDetail'
 // Sites routes (F-S10) — auto-provisioner GTM Hostinger
@@ -265,6 +266,8 @@ export function App() {
               {route === 'integracoes' && (
                 window.location.pathname.startsWith('/integracoes/gtm') ? (
                   <GtmContainerPage onNavigate={navigate} />
+                ) : window.location.pathname.startsWith('/integracoes/meta') ? (
+                  <MetaIntegrationPage onNavigate={navigate} />
                 ) : (
                   <Integrations onNavigate={navigate} />
                 )

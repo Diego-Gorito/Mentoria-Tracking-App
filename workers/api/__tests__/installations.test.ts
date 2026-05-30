@@ -124,7 +124,7 @@ describe('POST /api/installations (AC-5)', () => {
     expect(body.data.brand_slug).toBe('zerohum');
     expect(body.data.gtm_container_id).toBe('GTM-WVWQVMP'); // resolvido backend
     expect(body.data.status).toBe('draft');
-    expect(body.data.plugin_version).toBe('gtm4wp-1.18+bootstrap-v1');
+    expect(body.data.plugin_version).toBe('gtm4wp-1.18+bootstrap-v2');
   });
 
   it('brand_slug inválido (Zod) → 422 VALIDATION_ERROR', async () => {
