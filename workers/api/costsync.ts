@@ -50,13 +50,10 @@ export async function runCostSync(
   }
 
   const { data: accounts, error } = await supabaseAdmin
-    .schema('tracking')
-    .from('ad_accounts')
-    .select('tenant_id,brand_slug,platform,external_account_id,token_encrypted')
-    .eq('tenant_id', tenantId)
-    .eq('status', 'connected')
+    .schema('core')
+    .rpc('cost_sync_accounts', { p_tenant: tenantId })
 
-  if (error) throw new Error(`ad_accounts query failed: ${error.message}`)
+  if (error) throw new Error(`cost_sync_accounts failed: ${error.message}`)
 
   for (const acct of (accounts ?? []) as AdAccountRow[]) {
     const platform = acct.platform
@@ -97,8 +94,8 @@ export async function runCostSync(
       const costs = await provider.fetchCampaignCosts(conn, { datePreset })
       for (const c of costs) {
         const { error: upErr } = await supabaseAdmin
-          .schema('tracking')
-          .rpc('upsert_campaign_cost', {
+          .schema('core')
+          .rpc('cost_sync_upsert_cost', {
             p_tenant: conn.tenantId,
             p_brand: conn.brandSlug,
             p_platform: platform,
@@ -117,12 +114,12 @@ export async function runCostSync(
       result.accountsProcessed++
 
       await supabaseAdmin
-        .schema('tracking')
-        .from('ad_accounts')
-        .update({ last_synced_at: new Date().toISOString() })
-        .eq('tenant_id', conn.tenantId)
-        .eq('platform', platform)
-        .eq('external_account_id', conn.externalAccountId)
+        .schema('core')
+        .rpc('cost_sync_mark_synced', {
+          p_tenant: conn.tenantId,
+          p_platform: platform,
+          p_account_id: conn.externalAccountId,
+        })
     } catch (e) {
       result.accountsSkipped++
       bucket.error = e instanceof Error ? e.message : 'sync_failed'
@@ -137,11 +134,9 @@ export async function runCostSyncAllTenants(datePreset = 'last_30d', trigger = '
   const startedAt = new Date().toISOString()
   try {
     const { data, error } = await supabaseAdmin
-      .schema('tracking')
-      .from('ad_accounts')
-      .select('tenant_id')
-      .eq('status', 'connected')
-    if (error) throw new Error(`ad_accounts query failed: ${error.message}`)
+      .schema('core')
+      .rpc('cost_sync_accounts', { p_tenant: null })
+    if (error) throw new Error(`cost_sync_accounts failed: ${error.message}`)
     const tenantIds = [...new Set((data ?? []).map((r) => (r as { tenant_id: string }).tenant_id))]
     const results: CostSyncResult[] = []
     for (const t of tenantIds) results.push(await runCostSync(t, datePreset))
@@ -151,14 +146,13 @@ export async function runCostSyncAllTenants(datePreset = 'last_30d', trigger = '
       results,
     }
     // Auditoria (sem PII/token) — detail leva o byPlatform com erros (decrypt_failed etc).
-    await supabaseAdmin.schema('tracking').from('cost_sync_runs').insert({
-      started_at: startedAt,
-      finished_at: new Date().toISOString(),
-      trigger,
-      tenants: summary.tenants,
-      campaigns_upserted: summary.campaignsUpserted,
-      ok: true,
-      detail: {
+    await supabaseAdmin.schema('core').rpc('cost_sync_log_run', {
+      p_started: startedAt,
+      p_trigger: trigger,
+      p_tenants: summary.tenants,
+      p_campaigns: summary.campaignsUpserted,
+      p_ok: true,
+      p_detail: {
         byTenant: results.map((r) => ({
           tenant: r.tenantId,
           processed: r.accountsProcessed,
@@ -166,14 +160,17 @@ export async function runCostSyncAllTenants(datePreset = 'last_30d', trigger = '
           byPlatform: r.byPlatform,
         })),
       },
+      p_error: null,
     })
     return summary
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     await supabaseAdmin
-      .schema('tracking')
-      .from('cost_sync_runs')
-      .insert({ started_at: startedAt, finished_at: new Date().toISOString(), trigger, ok: false, error: msg })
+      .schema('core')
+      .rpc('cost_sync_log_run', {
+        p_started: startedAt, p_trigger: trigger, p_tenants: 0, p_campaigns: 0,
+        p_ok: false, p_detail: {}, p_error: msg,
+      })
       .then(
         () => {},
         () => {},
@@ -219,10 +216,8 @@ costSyncRouter.post('/run', authMiddleware, async (c) => {
 costSyncRouter.get('/platforms', authMiddleware, async (c) => {
   const ctx = getAuthCtx(c)
   const { data: accounts } = await supabaseAdmin
-    .schema('tracking')
-    .from('ad_accounts')
-    .select('platform,external_account_id,account_name,status,last_synced_at')
-    .eq('tenant_id', ctx.tenantId)
+    .schema('core')
+    .rpc('cost_sync_accounts_safe', { p_tenant: ctx.tenantId })
   return c.json({ supported: supportedCostPlatforms(), connected: accounts ?? [] })
 })
 
