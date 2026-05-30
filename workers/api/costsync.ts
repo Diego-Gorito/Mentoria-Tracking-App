@@ -137,6 +137,26 @@ export async function runCostSyncAllTenants(datePreset = 'last_30d') {
   }
 }
 
+/**
+ * Cron INTERNO: dispara o sync de custo periodicamente (read-only). Não depende de
+ * chamador externo nem expõe a internal key. 1ª execução ~2min após boot (deixa o
+ * serviço estabilizar), depois a cada `intervalMs`. Idempotente (upsert) — réplicas
+ * múltiplas não corrompem dado, no máximo repetem a leitura. @see docs/adr-0011 §5b.
+ */
+let costSyncTimer: ReturnType<typeof setInterval> | null = null
+export function startCostSyncScheduler(intervalMs = 6 * 60 * 60 * 1000): void {
+  if (process.env.NODE_ENV === 'test' || costSyncTimer) return
+  const run = () =>
+    runCostSyncAllTenants('last_30d')
+      .then((r) =>
+        console.log(`[cost-sync] ${r.tenants} tenant(s), ${r.campaignsUpserted} campanhas sincronizadas`),
+      )
+      .catch((e) => console.error('[cost-sync] erro:', e instanceof Error ? e.message : e))
+  setTimeout(run, 2 * 60 * 1000)
+  costSyncTimer = setInterval(run, intervalMs)
+  console.log(`[cost-sync] scheduler interno ativo (intervalo ${Math.round(intervalMs / 3600000)}h)`)
+}
+
 const costSyncRouter = new Hono()
 
 // POST /api/cost-sync/run — dispara o sync READ-ONLY pro tenant logado.

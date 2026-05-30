@@ -30,7 +30,7 @@ import sitesRouter from './sites'
 import installationsRouter from './installations'
 import gtmRouter from './gtm'
 import metaRouter from './meta'
-import costSyncRouter from './costsync'
+import costSyncRouter, { startCostSyncScheduler } from './costsync'
 import { authMiddleware, getAuthCtx } from './middleware'
 import { requestIdMiddleware } from './requestId'
 import { errorHandler } from './errorHandler'
@@ -246,4 +246,6 @@ app.notFound((c) => {
 const port = parseInt(process.env.PORT || '3000')
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`tracking-api listening on http://localhost:${info.port}`)
+  // Cron interno read-only: sync de custo de ad platforms a cada 6h (ADR-0011 §5b).
+  startCostSyncScheduler()
 })
